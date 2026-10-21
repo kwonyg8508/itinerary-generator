@@ -49,7 +49,6 @@ with col2:
         else:
             with st.spinner("AI가 랜드사 표준 문체와 서식에 맞춰 일정표를 제작 중입니다..."):
                 try:
-                    # 1. 랜드사 전용 프롬프트 구성
                     prompt = f"""
 당신은 15년 차 유럽 전문 랜드사의 수석 오퍼레이터입니다.
 아래 루팅을 분석하여 한국 대형 여행사용 정밀 일정표 데이터를 JSON 배열로 출력하세요.
@@ -58,25 +57,25 @@ with col2:
 {routing_text}
 
 [작성 및 출력 원칙]
-1. 각 일차(Day)는 row_items 리스트를 가집니다. 각 row는 [도시, 교통편, 시간, 일정내용]으로 구성됩니다.
+1. 각 일차(Day)는 rows 리스트를 가집니다. 각 row는 {{"city": "...", "transport": "...", "time": "...", "schedule": "..."}} 객체입니다.
 2. 일정 설명 문체:
    - 주요 관광지 앞에는 반드시 ' ▶ ' 기호를 붙이고, 절대 '입장지: 설명' 형식을 쓰지 마세요.
    - 반드시 '~한 [명소명]' 형태로 작성하세요. (예: " ▶ 아름다운 프라하의 휴식처 카를교", " ▶ 독특한 철제 간판이 늘어선 번화가 게트라이데 거리", " ▶ 깍아지는 절벽위에 세워진 고성 블레드성")
    - 내부관람 시에는 명소 뒤에 '(내부)' 표기.
 3. 일정 라인 구성 순서:
    - 1일차(출발일):
-     1행: [도시: "인  천", 교통편: "", 시간: "", 일정: "인천 국제공항 미팅 및 출국 수속"]
-     2행: [도시: "", 교통편: 항공편명(예: KE969), 시간: 출발시간(예: "10:50"), 일정: "인천 국제공항 출발, [목적지] 향발"]
-     3행: [도시: 목적지도착도시, 교통편: "", 시간: 도착시간(예: "16:20"), 일정: "[목적지] 도착 후 가이드 미팅"]
-     4행: [도시: "", 교통편: "", 시간: "", 일정: "석식 후"]
-     5행: [도시: "", 교통편: "", 시간: "", 일정: "호텔 투숙 및 휴식"]
+     1행: {{"city": "인  천", "transport": "", "time": "", "schedule": "인천 국제공항 미팅 및 출국 수속"}}
+     2행: {{"city": "", "transport": "항공편명(예: KE969)", "time": "출발시간(예: 10:50)", "schedule": "인천 국제공항 출발, [목적지] 향발"}}
+     3행: {{"city": "목적지도착도시", "transport": "", "time": "도착시간(예: 16:20)", "schedule": "[목적지] 도착 후 가이드 미팅"}}
+     4행: {{"city": "", "transport": "", "time": "", "schedule": "석식 후"}}
+     5행: {{"city": "", "transport": "", "time": "", "schedule": "호텔 투숙 및 휴식"}}
    - 2일차 이후(관광일):
-     1행: [도시: "", 교통편: "", 시간: "", 일정: "호텔 조식 후"]
-     2행: [도시: "", 교통편: "", 시간: "", 일정: "[이동지 또는 첫 집결 안내]"] (조식 후 이동이 있으면 조식 아랫 칸에 기재)
-     3행: [도시: 관광도시명, 교통편: "전용차량", 시간: "전  일", 일정: " ▶ 첫번째 관광지..."]
+     1행: {{"city": "", "transport": "", "time": "", "schedule": "호텔 조식 후"}}
+     2행: {{"city": "", "transport": "", "time": "", "schedule": "[이동지 또는 첫 집결 안내]"}} (조식 후 이동이 있으면 조식 아랫 칸에 기재)
+     3행: {{"city": "관광도시명", "transport": "전용차량", "time": "전  일", "schedule": " ▶ 첫번째 관광지..."}}
      이후 행: 관광지들을 ' ▶ ~한 명소' 형태로 순차 기재
-     마지막 전 행: [도시: "", 교통편: "", 시간: "", 일정: "석식 후"]
-     마지막 행: [도시: "", 교통편: "", 시간: "", 일정: "호텔 투숙 및 휴식"]
+     마지막 전 행: {{"city": "", "transport": "", "time": "", "schedule": "석식 후"}}
+     마지막 행: {{"city": "", "transport": "", "time": "", "schedule": "호텔 투숙 및 휴식"}}
 4. 도시 기재 규칙: 해당 도시 일정이 실제로 시작하는 라인의 도시 칸에만 적으세요.
 5. 식사: meals는 [조식, 중식, 석식] 3개 요소 배열 (예: ["호텔식", "현지식", "한  식"], 비행기 이동은 "-", 없으면 "-"). 특식 표시는 제외.
 6. 호텔: hotel은 "HOTEL : ANY 4* HOTEL CLASS" 또는 기내숙박 시 "HOTEL : 기내 숙박".
@@ -107,7 +106,7 @@ with col2:
                     
                     parsed_days = json.loads(response.text)
                     
-                    # 2. 엑셀 워크북 직접 생성 (사내 정밀 규격 적용)
+                    # 엑셀 워크북 생성
                     wb = openpyxl.Workbook()
                     ws = wb.active
                     ws.title = "일정표"
@@ -129,29 +128,29 @@ with col2:
                     thin_side = Side(style="thin", color="000000")
                     med_side = Side(style="medium", color="000000")
                     
-                    # 1행: 최상단 제목 (A1:G1 병합 및 노란 배경)
+                    # 1행: 최상단 타이틀 (값 먼저 쓰고 테두리 입힌 뒤 병합)
                     full_title = tour_title.strip() if tour_title.strip() else f"{start_date.strftime('%Y-%m-%d')} 유럽투어 일정표"
-                    ws.merge_cells("A1:G1")
                     ws.row_dimensions[1].height = 28.0
+                    ws.cell(1, 1, full_title).font = font_title
+                    ws.cell(1, 1).alignment = align_center
+                    
                     for c in range(1, 8):
                         cell = ws.cell(1, c)
                         cell.fill = fill_title
                         cell.border = Border(top=med_side, bottom=thin_side, left=med_side if c==1 else None, right=med_side if c==7 else None)
-                    t_cell = ws.cell(1, 1, full_title)
-                    t_cell.font = font_title
-                    t_cell.alignment = align_center
+                    ws.merge_cells("A1:G1")
                     
-                    # 2행: 헤더행
+                    # 2행: 헤더행 (값 먼저 쓰고 병합)
                     headers = ["날짜", "도시", "교통편", "시간", "일정", "식사", ""]
                     ws.row_dimensions[2].height = 22.0
-                    ws.merge_cells("F2:G2")
                     for c in range(1, 8):
                         cell = ws.cell(2, c, headers[c-1])
                         cell.font = font_header
                         cell.alignment = align_center
                         cell.border = Border(top=thin_side, bottom=med_side, left=med_side if c==1 else thin_side, right=med_side if c==7 else thin_side)
+                    ws.merge_cells("F2:G2")
                     
-                    # 열 너비 설정 (요청 규격 100% 반영)
+                    # 열 너비 설정
                     col_widths = {1: 9.25, 2: 12.75, 3: 7.5, 4: 9.25, 5: 64.25, 6: 3.63, 7: 10.0}
                     for c_idx, width in col_widths.items():
                         ws.column_dimensions[get_column_letter(c_idx)].width = width
@@ -159,7 +158,7 @@ with col2:
                     days_korean = ["월요일", "화요일", "수요일", "목요일", "금요일", "토요일", "일요일"]
                     cur_row = 3
                     
-                    # 일자별 데이터 작성 루프
+                    # 일자별 블록 생성
                     for item in parsed_days:
                         day_num = item.get("day", 1)
                         curr_date = start_date + timedelta(days=day_num - 1)
@@ -171,10 +170,9 @@ with col2:
                         hotel_str = item.get("hotel", "HOTEL : ANY 4* HOTEL CLASS")
                         meals = item.get("meals", ["-", "-", "-"])
                         
-                        # 최소 3줄(날짜/식사용) 및 행 계산
-                        total_rows = max(len(rows_data), 3) + 1 # +1은 HOTEL 행
+                        total_rows = max(len(rows_data), 3) + 1
                         
-                        # 일자 블록 기본 셀 서식 (가로 내부선 제거, 세로선만 적용)
+                        # 셀 테두리 및 폰트 세팅
                         for r_idx in range(total_rows):
                             r = cur_row + r_idx
                             ws.row_dimensions[r].height = 18.75
@@ -184,20 +182,16 @@ with col2:
                                 cell = ws.cell(r, c)
                                 cell.font = font_body
                                 
-                                # 테두리 처리: 내부 가로선 없음, 블록 맨 아래(HOTEL)에만 굵은 바닥선
-                                b_top = None
+                                b_top = thin_side if is_hotel_row else None
                                 b_bottom = med_side if is_hotel_row else None
                                 b_left = med_side if c == 1 else thin_side
-                                b_right = med_side if c == 7 else (thin_side if c != 6 else thin_side)
+                                b_right = med_side if c == 7 else thin_side
                                 
-                                # HOTEL 행 바로 위에는 얇은 윗선 추가
                                 if is_hotel_row:
-                                    b_top = thin_side
                                     cell.fill = fill_hotel
-                                
                                 cell.border = Border(top=b_top, bottom=b_bottom, left=b_left, right=b_right)
                         
-                        # 1열: 날짜 (제01일 / 12월 05일 / 요일)
+                        # 1열: 날짜
                         c1 = ws.cell(cur_row, 1, day_str)
                         c1.font = font_bold
                         c1.alignment = align_top_center
@@ -208,37 +202,32 @@ with col2:
                         c3 = ws.cell(cur_row + 2, 1, weekday_str)
                         c3.alignment = align_top_center
                         
-                        # 2~5열: 세부 행 데이터 기입
+                        # 2~5열: 일정 데이터
                         for idx, r_data in enumerate(rows_data):
                             r = cur_row + idx
-                            # 도시
                             if r_data.get("city"):
                                 cell_city = ws.cell(r, 2, r_data.get("city"))
                                 cell_city.alignment = align_top_center
-                            # 교통편
                             if r_data.get("transport"):
                                 cell_tr = ws.cell(r, 3, r_data.get("transport"))
                                 cell_tr.alignment = align_top_center
-                            # 시간
                             if r_data.get("time"):
                                 cell_tm = ws.cell(r, 4, r_data.get("time"))
                                 cell_tm.alignment = align_top_center
-                            # 일정
                             cell_sc = ws.cell(r, 5, r_data.get("schedule", ""))
                             cell_sc.alignment = align_top_left
                             
-                        # HOTEL 행 기입 (일정 5열에 볼드 표기)
+                        # HOTEL 행
                         h_row = cur_row + total_rows - 1
                         h_cell = ws.cell(h_row, 5, hotel_str)
                         h_cell.font = font_bold
                         h_cell.alignment = align_top_left
                         
-                        # 6, 7열: 조/중/석 식사 기입 (내부 가로선 없이 3행에 깔끔 배치)
+                        # 6, 7열: 식사
                         meal_labels = ["조", "중", "석"]
                         for m_idx in range(3):
                             l_cell = ws.cell(cur_row + m_idx, 6, meal_labels[m_idx])
                             l_cell.alignment = align_top_center
-                            
                             v_cell = ws.cell(cur_row + m_idx, 7, meals[m_idx] if m_idx < len(meals) else "-")
                             v_cell.alignment = align_top_center
                             
