@@ -104,3 +104,154 @@ with col2:
       {{"city": "인  천", "transport": "", "time": "18:35", "schedule": "인천 도착 후 해산"}}
     ],
     "meals": ["기내식", "-", "-"],
+    "hotel": ""
+  }}
+]
+"""
+                    response = client.models.generate_content(
+                        model='gemini-3.5-flash-lite',
+                        contents=prompt,
+                        config=types.GenerateContentConfig(
+                            response_mime_type="application/json"
+                        )
+                    )
+                    
+                    parsed_days = json.loads(response.text)
+                    
+                    # 엑셀 워크북 생성
+                    wb = openpyxl.Workbook()
+                    ws = wb.active
+                    ws.title = "일정표"
+                    ws.views.sheetView[0].showGridLines = True
+                    
+                    font_title = Font(name="맑은 고딕", size=15, bold=True)
+                    font_header = Font(name="맑은 고딕", size=10, bold=True)
+                    font_body = Font(name="맑은 고딕", size=9)
+                    font_bold = Font(name="맑은 고딕", size=9, bold=True)
+                    
+                    fill_title = PatternFill(start_color="FFFFCC", end_color="FFFFCC", fill_type="solid")
+                    fill_hotel = PatternFill(start_color="EFEFEF", end_color="EFEFEF", fill_type="solid")
+                    
+                    align_center = Alignment(horizontal="center", vertical="center")
+                    align_mid_left = Alignment(horizontal="left", vertical="center", wrap_text=True)
+                    
+                    thin_side = Side(style="thin", color="000000")
+                    med_side = Side(style="medium", color="000000")
+                    
+                    # 1행: 타이틀바
+                    full_title = tour_title.strip() if tour_title.strip() else f"{start_date.strftime('%Y-%m-%d')} 유럽투어 일정표"
+                    ws.row_dimensions[1].height = 28.0
+                    ws.cell(1, 1, full_title).font = font_title
+                    ws.cell(1, 1).alignment = align_center
+                    
+                    for c in range(1, 8):
+                        cell = ws.cell(1, c)
+                        cell.fill = fill_title
+                        cell.border = Border(top=med_side, bottom=med_side, left=med_side if c==1 else None, right=med_side if c==7 else None)
+                    ws.merge_cells("A1:G1")
+                    
+                    # 2행: 간격행 (높이 13.0)
+                    ws.row_dimensions[2].height = 13.0
+                    
+                    # 3행: 헤더행
+                    headers = ["날짜", "도시", "교통편", "시간", "일정", "식사", ""]
+                    ws.row_dimensions[3].height = 22.0
+                    for c in range(1, 8):
+                        cell = ws.cell(3, c, headers[c-1])
+                        cell.font = font_header
+                        cell.alignment = align_center
+                        cell.border = Border(top=med_side, bottom=med_side, left=med_side if c==1 else thin_side, right=med_side if c==7 else thin_side)
+                    ws.merge_cells("F3:G3")
+                    
+                    # 열 너비 설정
+                    col_widths = {1: 9.25, 2: 12.75, 3: 7.5, 4: 9.25, 5: 64.25, 6: 3.63, 7: 10.0}
+                    for c_idx, width in col_widths.items():
+                        ws.column_dimensions[get_column_letter(c_idx)].width = width
+                    
+                    days_korean = ["월요일", "화요일", "수요일", "목요일", "금요일", "토요일", "일요일"]
+                    cur_row = 4
+                    
+                    for item in parsed_days:
+                        day_num = item.get("day", 1)
+                        curr_date = start_date + timedelta(days=day_num - 1)
+                        day_str = f"제{day_num:02d}일"
+                        date_str = curr_date.strftime("%m월 %d일")
+                        weekday_str = days_korean[curr_date.weekday()]
+                        
+                        rows_data = item.get("rows", [])
+                        hotel_str = item.get("hotel", "")
+                        meals = item.get("meals", ["-", "-", "-"])
+                        
+                        has_hotel = bool(hotel_str.strip())
+                        total_rows = max(len(rows_data), 3) + (1 if has_hotel else 0)
+                        
+                        for r_idx in range(total_rows):
+                            r = cur_row + r_idx
+                            ws.row_dimensions[r].height = 18.75
+                            is_last_row = (r_idx == total_rows - 1)
+                            
+                            for c in range(1, 8):
+                                cell = ws.cell(r, c)
+                                cell.font = font_body
+                                
+                                b_top = thin_side if (is_last_row and has_hotel) else None
+                                b_bottom = med_side if is_last_row else None
+                                b_left = med_side if c == 1 else thin_side
+                                b_right = med_side if c == 7 else thin_side
+                                
+                                if is_last_row and has_hotel:
+                                    cell.fill = fill_hotel
+                                cell.border = Border(top=b_top, bottom=b_bottom, left=b_left, right=b_right)
+                        
+                        # 1열 날짜
+                        ws.cell(cur_row, 1, day_str).font = font_bold
+                        ws.cell(cur_row, 1).alignment = align_center
+                        ws.cell(cur_row + 1, 1, date_str).alignment = align_center
+                        ws.cell(cur_row + 2, 1, weekday_str).alignment = align_center
+                        
+                        # 2~5열 세부 일정
+                        for idx, r_data in enumerate(rows_data):
+                            r = cur_row + idx
+                            if r_data.get("city"):
+                                cell_city = ws.cell(r, 2, r_data.get("city"))
+                                cell_city.alignment = align_center
+                            if r_data.get("transport"):
+                                cell_tr = ws.cell(r, 3, r_data.get("transport"))
+                                cell_tr.alignment = align_center
+                            if r_data.get("time"):
+                                cell_tm = ws.cell(r, 4, r_data.get("time"))
+                                cell_tm.alignment = align_center
+                            cell_sc = ws.cell(r, 5, r_data.get("schedule", ""))
+                            cell_sc.alignment = align_mid_left
+                            
+                        # HOTEL 행 (기재할 호텔이 있을 때만 표기)
+                        if has_hotel:
+                            h_row = cur_row + total_rows - 1
+                            h_cell = ws.cell(h_row, 5, hotel_str)
+                            h_cell.font = font_bold
+                            h_cell.alignment = align_mid_left
+                        
+                        # 식사
+                        meal_labels = ["조", "중", "석"]
+                        for m_idx in range(3):
+                            ws.cell(cur_row + m_idx, 6, meal_labels[m_idx]).alignment = align_center
+                            ws.cell(cur_row + m_idx, 7, meals[m_idx] if m_idx < len(meals) else "-").alignment = align_center
+                            
+                        cur_row += total_rows
+                        
+                    output = io.BytesIO()
+                    wb.save(output)
+                    output.seek(0)
+                    
+                    st.success("✅ 사내 표준 인쇄 서식으로 일정표가 완성되었습니다!")
+                    final_title = tour_title.strip() if tour_title.strip() else "유럽투어"
+                    file_name = f"{start_date.strftime('%Y-%m-%d')} {final_title} - 일정표.xlsx"
+                    
+                    st.download_button(
+                        label="📥 완성된 엑셀 일정표 다운로드",
+                        data=output,
+                        file_name=file_name,
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    )
+                except Exception as e:
+                    st.error(f"오류가 발생했습니다: {str(e)}")
