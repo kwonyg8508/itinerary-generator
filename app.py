@@ -59,194 +59,48 @@ with col2:
 {routing_text}
 
 [절대 금지 및 필수 작성 규칙]
-1. 공항 명칭 금지: '국제공항', '터미널', '반타', '카스트룹' 등 공항 명칭 일체 쓰지 마세요. 무조건 '인천', '코펜하겐' 등 도시명만 씁니다.
+1. 공항 명칭 금지: '국제공항', '터미널', '반타', '카스트룹' 등 공항 명칭 일체 쓰지 마세요. 무조건 '인천', '코펜하겐', '헬싱키' 등 도시명만 씁니다.
 2. 시간란 규칙: '오전', '오후', '저녁', '출발', '도착' 등의 한글을 절대 넣지 마세요. 오직 'HH:MM' 형태의 순수 숫자 시간이나 '전  일'만 허용됩니다.
-3. 교통편('전용차량') 표기 규칙:
-   - 일반 육로 관광일의 경우: 1행(호텔 조식 후) 다음 줄인 2행에만 transport="전용차량", time="전  일"을 단 1회 기재합니다.
-   - 그 이후 중간 이동('~로 이동')이나 관광지, 식사 행에는 transport를 절대 넣지 말고 무조건 빈칸("")으로 두세요.
-4. 항공편 표기 규칙:
-   - 편명(transport)은 비행기가 출발하는 행에만 적고, 도착 행의 transport는 빈칸("")으로 둡니다.
-   - 출발 시간과 도착 시간은 각각 해당 행의 time 칸에 반드시 둘 다 숫자로 적으세요 (출발 시간만 있으면 예상 도착 시간을 계산해서 채울 것).
-   - 비행기 출발 일정 문구는 간결하게 '[목적지] 향발'로 작성하세요 (예: "인천 출발, 코펜하겐 향발").
+3. 교통편('전용차량') 표기 엄격 제한:
+   - 일반 육로 관광일의 경우: 1행(호텔 조식 후 또는 하선 후) 바로 다음 줄인 2행에만 transport="전용차량", time="전  일"을 단 1회 기재합니다.
+   - 관광지 이동, 호텔 이동, 특히 "공항으로 이동" 같은 마무리 이동 행에는 transport를 절대 넣지 말고 무조건 빈칸("")으로 두세요.
+4. 항공편 및 경유지 분리 규칙 (중요):
+   - 도시 이름은 무조건 city 칸에만 들어가야 합니다. transport 칸에 도시 이름을 넣는 것은 절대 금지입니다.
+   - transport 칸에는 오직 순수 항공 편명(예: "SK1717", "SK987")만 들어갑니다.
+   - 항공 출발/도착 시간은 각각 해당 행의 time 칸에 반드시 둘 다 숫자로 적으세요 (출발 시간만 있으면 예상 도착 시간을 계산해서 채울 것).
+   - 경유 항공편 처리 방식 예시 (헬싱키/코펜하겐/인천 귀국일):
+     * 헬싱키 공항 출발 행: city="헬싱키", transport="SK1717", time="21:05", schedule="헬싱키 출발, 코펜하겐 향발"
+     * 코펜하겐 도착 및 환승 행: city="코펜하겐", transport="", time="21:45", schedule="코펜하겐 도착 후 환승"
+     * 코펜하겐 출발 행: city="", transport="SK987", time="23:55", schedule="코펜하겐 출발, 인천 향발"
+     * 다음 날 인천 도착 행: city="인  천", transport="", time="18:35", schedule="인천 도착 후 해산"
 5. 관광지 행 분리:
-   - 한 행에 여러 관광지를 줄바꿈으로 몰아넣지 마세요. 무조건 1개 관광지당 rows의 1개 객체로 분리하세요.
+   - 한 행에 여러 관광지를 몰아넣지 마세요. 무조건 1개 관광지당 rows의 1개 객체로 분리하세요.
    - 관광지 앞에는 ' ▶ '를 붙이고 '~한 [명소명]' 문체를 유지하세요. 사용자의 필수 스팟을 포함하여 3~5개 명소를 채우세요.
-6. 일정 마무리:
-   - 호텔 투숙일: 마지막 전 행="석식 후", 마지막 행="호텔 투숙 및 휴식"
-   - 크루즈 투숙일: 마지막 전 행="선내 뷔페 석식 후", 마지막 행="선내 투숙 및 휴식"
-   - 귀국/기내박일: 별도 투숙 문구 없이 항공 일정 및 "인천 도착 후 해산"으로 마무리.
-7. 호텔 표기: "HOTEL : ANY 4* HOTEL CLASS", "CRUISE : DFDS SEAWAYS (SEAVIEW 2-BERTH)", "HOTEL : IN-FLIGHT" 등 영문 표기.
+6. 일정 마무리 및 호텔 표기:
+   - 호텔 투숙일: 마지막 전 행="석식 후", 마지막 행="호텔 투숙 및 휴식", hotel="HOTEL : ANY 4* HOTEL CLASS"
+   - 크루즈 투숙일: 마지막 전 행="선내 뷔페 석식 후", 마지막 행="선내 투숙 및 휴식", hotel="CRUISE : DFDS SEAWAYS (SEAVIEW 2-BERTH)" 또는 "CRUISE : SILJA LINE (SEAVIEW 2-BERTH)"
+   - 기내 숙박일(야간 비행): 별도 투숙 문구 없이 항공 일정으로 끝나며, hotel="HOTEL : 기내 숙박"
+   - 마지막 날 귀국: "인천 도착 후 해산"으로 마무리하며, hotel="" (빈칸)
 
 [반드시 아래 예시와 정확히 동일한 구조의 JSON 포맷으로만 응답]
 [
   {{
-    "day": 1,
+    "day": 9,
     "rows": [
-      {{"city": "인  천", "transport": "", "time": "", "schedule": "인천 미팅 및 출국 수속"}},
-      {{"city": "", "transport": "SK988", "time": "23:35", "schedule": "인천 출발, 코펜하겐 향발"}}
+      {{"city": "", "transport": "", "time": "", "schedule": "호텔 조식 후"}},
+      {{"city": "헬싱키", "transport": "전용차량", "time": "전  일", "schedule": "헬싱키 시내 관광"}},
+      {{"city": "", "transport": "", "time": "", "schedule": " ▶ 웅장한 백색의 랜드마크 헬싱키 대성당"}},
+      {{"city": "", "transport": "", "time": "", "schedule": "공항으로 이동"}},
+      {{"city": "헬싱키", "transport": "SK1717", "time": "21:05", "schedule": "헬싱키 출발, 코펜하겐 향발"}},
+      {{"city": "코펜하겐", "transport": "", "time": "21:45", "schedule": "코펜하겐 도착 후 환승"}},
+      {{"city": "", "transport": "SK987", "time": "23:55", "schedule": "코펜하겐 출발, 인천 향발"}}
     ],
-    "meals": ["-", "-", "기내식"],
-    "hotel": "HOTEL : IN-FLIGHT"
+    "meals": ["호텔식", "현지식", "기내식"],
+    "hotel": "HOTEL : 기내 숙박"
   }},
   {{
-    "day": 2,
+    "day": 10,
     "rows": [
-      {{"city": "코펜하겐", "transport": "", "time": "06:30", "schedule": "코펜하겐 도착 후 가이드 미팅"}},
-      {{"city": "", "transport": "전용차량", "time": "전  일", "schedule": "코펜하겐 시내로 이동"}},
-      {{"city": "", "transport": "", "time": "", "schedule": " ▶ 알록달록한 건물이 늘어선 동화 같은 항구 뉘하운 유람선 탑승"}},
-      {{"city": "", "transport": "", "time": "", "schedule": " ▶ 덴마크 왕실의 주거지 아말리엔보르 궁전(외관)"}},
-      {{"city": "", "transport": "", "time": "", "schedule": "DFDS 터미널로 이동하여 승선 수속"}},
-      {{"city": "", "transport": "DFDS", "time": "16:30", "schedule": "코펜하겐 출발, 오슬로 향발"}},
-      {{"city": "", "transport": "", "time": "", "schedule": "선내 뷔페 석식 후"}},
-      {{"city": "", "transport": "", "time": "", "schedule": "선내 투숙 및 휴식"}}
+      {{"city": "인  천", "transport": "", "time": "18:35", "schedule": "인천 도착 후 해산"}}
     ],
-    "meals": ["기내식", "현지식", "선상식"],
-    "hotel": "CRUISE : DFDS SEAWAYS (SEAVIEW 2-BERTH)"
-  }}
-]
-"""
-                    response = client.models.generate_content(
-                        model='gemini-3.5-flash-lite',
-                        contents=prompt,
-                        config=types.GenerateContentConfig(
-                            response_mime_type="application/json"
-                        )
-                    )
-                    
-                    parsed_days = json.loads(response.text)
-                    
-                    # 엑셀 워크북 생성
-                    wb = openpyxl.Workbook()
-                    ws = wb.active
-                    ws.title = "일정표"
-                    ws.views.sheetView[0].showGridLines = True
-                    
-                    font_title = Font(name="맑은 고딕", size=15, bold=True)
-                    font_header = Font(name="맑은 고딕", size=10, bold=True)
-                    font_body = Font(name="맑은 고딕", size=9)
-                    font_bold = Font(name="맑은 고딕", size=9, bold=True)
-                    
-                    fill_title = PatternFill(start_color="FFFFCC", end_color="FFFFCC", fill_type="solid")
-                    fill_hotel = PatternFill(start_color="EFEFEF", end_color="EFEFEF", fill_type="solid")
-                    
-                    align_center = Alignment(horizontal="center", vertical="center")
-                    align_mid_left = Alignment(horizontal="left", vertical="center", wrap_text=True)
-                    
-                    thin_side = Side(style="thin", color="000000")
-                    med_side = Side(style="medium", color="000000")
-                    
-                    # 1행: 타이틀바
-                    full_title = tour_title.strip() if tour_title.strip() else f"{start_date.strftime('%Y-%m-%d')} 유럽투어 일정표"
-                    ws.row_dimensions[1].height = 28.0
-                    ws.cell(1, 1, full_title).font = font_title
-                    ws.cell(1, 1).alignment = align_center
-                    
-                    for c in range(1, 8):
-                        cell = ws.cell(1, c)
-                        cell.fill = fill_title
-                        cell.border = Border(top=med_side, bottom=med_side, left=med_side if c==1 else None, right=med_side if c==7 else None)
-                    ws.merge_cells("A1:G1")
-                    
-                    # 2행: 간격행 (높이 13.0)
-                    ws.row_dimensions[2].height = 13.0
-                    
-                    # 3행: 헤더행
-                    headers = ["날짜", "도시", "교통편", "시간", "일정", "식사", ""]
-                    ws.row_dimensions[3].height = 22.0
-                    for c in range(1, 8):
-                        cell = ws.cell(3, c, headers[c-1])
-                        cell.font = font_header
-                        cell.alignment = align_center
-                        cell.border = Border(top=med_side, bottom=med_side, left=med_side if c==1 else thin_side, right=med_side if c==7 else thin_side)
-                    ws.merge_cells("F3:G3")
-                    
-                    # 열 너비 설정
-                    col_widths = {1: 9.25, 2: 12.75, 3: 7.5, 4: 9.25, 5: 64.25, 6: 3.63, 7: 10.0}
-                    for c_idx, width in col_widths.items():
-                        ws.column_dimensions[get_column_letter(c_idx)].width = width
-                    
-                    days_korean = ["월요일", "화요일", "수요일", "목요일", "금요일", "토요일", "일요일"]
-                    cur_row = 4
-                    
-                    for item in parsed_days:
-                        day_num = item.get("day", 1)
-                        curr_date = start_date + timedelta(days=day_num - 1)
-                        day_str = f"제{day_num:02d}일"
-                        date_str = curr_date.strftime("%m월 %d일")
-                        weekday_str = days_korean[curr_date.weekday()]
-                        
-                        rows_data = item.get("rows", [])
-                        hotel_str = item.get("hotel", "HOTEL : ANY 4* HOTEL CLASS")
-                        meals = item.get("meals", ["-", "-", "-"])
-                        
-                        total_rows = max(len(rows_data), 3) + 1
-                        
-                        for r_idx in range(total_rows):
-                            r = cur_row + r_idx
-                            ws.row_dimensions[r].height = 18.75
-                            is_hotel_row = (r_idx == total_rows - 1)
-                            
-                            for c in range(1, 8):
-                                cell = ws.cell(r, c)
-                                cell.font = font_body
-                                
-                                b_top = thin_side if is_hotel_row else None
-                                b_bottom = med_side if is_hotel_row else None
-                                b_left = med_side if c == 1 else thin_side
-                                b_right = med_side if c == 7 else thin_side
-                                
-                                if is_hotel_row:
-                                    cell.fill = fill_hotel
-                                cell.border = Border(top=b_top, bottom=b_bottom, left=b_left, right=b_right)
-                        
-                        # 1열 날짜
-                        ws.cell(cur_row, 1, day_str).font = font_bold
-                        ws.cell(cur_row, 1).alignment = align_center
-                        ws.cell(cur_row + 1, 1, date_str).alignment = align_center
-                        ws.cell(cur_row + 2, 1, weekday_str).alignment = align_center
-                        
-                        # 2~5열 세부 일정
-                        for idx, r_data in enumerate(rows_data):
-                            r = cur_row + idx
-                            if r_data.get("city"):
-                                cell_city = ws.cell(r, 2, r_data.get("city"))
-                                cell_city.alignment = align_center
-                            if r_data.get("transport"):
-                                cell_tr = ws.cell(r, 3, r_data.get("transport"))
-                                cell_tr.alignment = align_center
-                            if r_data.get("time"):
-                                cell_tm = ws.cell(r, 4, r_data.get("time"))
-                                cell_tm.alignment = align_center
-                            cell_sc = ws.cell(r, 5, r_data.get("schedule", ""))
-                            cell_sc.alignment = align_mid_left
-                            
-                        # HOTEL 행
-                        h_row = cur_row + total_rows - 1
-                        h_cell = ws.cell(h_row, 5, hotel_str)
-                        h_cell.font = font_bold
-                        h_cell.alignment = align_mid_left
-                        
-                        # 식사
-                        meal_labels = ["조", "중", "석"]
-                        for m_idx in range(3):
-                            ws.cell(cur_row + m_idx, 6, meal_labels[m_idx]).alignment = align_center
-                            ws.cell(cur_row + m_idx, 7, meals[m_idx] if m_idx < len(meals) else "-").alignment = align_center
-                            
-                        cur_row += total_rows
-                        
-                    output = io.BytesIO()
-                    wb.save(output)
-                    output.seek(0)
-                    
-                    st.success("✅ 사내 표준 인쇄 서식으로 일정표가 완성되었습니다!")
-                    final_title = tour_title.strip() if tour_title.strip() else "유럽투어"
-                    file_name = f"{start_date.strftime('%Y-%m-%d')} {final_title} - 일정표.xlsx"
-                    
-                    st.download_button(
-                        label="📥 완성된 엑셀 일정표 다운로드",
-                        data=output,
-                        file_name=file_name,
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                    )
-                except Exception as e:
-                    st.error(f"오류가 발생했습니다: {str(e)}")
+    "meals": ["기내식", "-", "-"],
