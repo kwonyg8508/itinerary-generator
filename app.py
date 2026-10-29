@@ -7,11 +7,122 @@ import io
 import json
 import os
 import re
+import base64
 from google import genai
 from google.genai import types
 
 # 페이지 기본 설정
 st.set_page_config(page_title="유럽 랜드사 일정표 생성기", layout="wide", page_icon="🇪🇺")
+
+# 프리미엄 픽셀 UI 커스텀 스타일
+st.markdown("""
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Pretendard:wght@400;600;700&display=swap');
+
+html, body, [class*="css"] {
+    font-family: 'Pretendard', sans-serif;
+}
+
+.assistant-card {
+    background: #ffffff;
+    border: 2px solid #e2e8f0;
+    border-radius: 16px;
+    padding: 18px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    margin-bottom: 20px;
+}
+
+.gif-wrapper {
+    width: 140px;
+    height: 120px;
+    flex-shrink: 0;
+    border-radius: 12px;
+    overflow: hidden;
+    border: 2px solid #cbd5e1;
+    background: #0f172a;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: inset 0 2px 4px rgba(0,0,0,0.2);
+}
+
+.gif-wrapper img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    image-rendering: pixelated;
+}
+
+.speech-bubble {
+    flex-grow: 1;
+    background: #f8fafc;
+    border: 1.5px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 14px 18px;
+    position: relative;
+}
+
+.speech-bubble::before {
+    content: '';
+    position: absolute;
+    left: -10px;
+    top: 50%;
+    transform: translateY(-50%);
+    border-width: 6px 10px 6px 0;
+    border-style: solid;
+    border-color: transparent #e2e8f0 transparent transparent;
+}
+
+.assistant-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 6px;
+}
+
+.assistant-name {
+    font-size: 14px;
+    font-weight: 700;
+    color: #1e293b;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.assistant-badge {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 20px;
+}
+
+.badge-idle {
+    background: #e2e8f0;
+    color: #475569;
+}
+
+.badge-working {
+    background: #fee2e2;
+    color: #ef4444;
+}
+
+.badge-success {
+    background: #dcfce7;
+    color: #15803d;
+}
+
+.assistant-message {
+    font-size: 13.5px;
+    font-weight: 500;
+    color: #334155;
+    line-height: 1.5;
+}
+</style>
+""", unsafe_allow_html=True)
+
 st.title("🇪🇺 유럽 일정표 자동 생성 시스템")
 st.caption("출발일과 루팅만 입력하면 사내 표준 서식 엑셀 파일로 바로 변환됩니다.")
 
@@ -44,24 +155,51 @@ with col1:
 with col2:
     st.subheader("2. AI 수배팀 작업 현황")
     
-    # 움직이는 GIF를 최우선으로 탐색
+    # GIF/이미지 파일을 직접 인코딩하여 캐싱 없이 무한 재생 보장
     found_media = None
-    candidates = ["assistant.gif", "assistant.png", "assitant.png", "assistant.jpeg", "assistant.jpg"]
-    for c in candidates:
+    for c in ["assistant.gif", "assistant.png", "assitant.png", "assistant.jpeg", "assistant.jpg"]:
         if os.path.exists(c):
             found_media = c
             break
 
-    img_col, bubble_col = st.columns([1, 2])
-    with img_col:
-        if found_media:
-            st.image(found_media, width=170)
+    media_b64 = ""
+    if found_media:
+        with open(found_media, "rb") as f:
+            mime = "image/gif" if found_media.endswith(".gif") else "image/png"
+            media_b64 = f"data:{mime};base64,{base64.b64encode(f.read()).decode()}"
+
+    ui_placeholder = st.empty()
+
+    def render_assistant_ui(status="idle", message="선배님, 루팅 던져주시면 바로 랜드사 규격 엑셀 뽑아오겠습니다! ☕"):
+        if status == "working":
+            badge_text = "🔥 폭풍 작업 중"
+            badge_class = "badge-working"
+        elif status == "success":
+            badge_text = "🎉 제작 완료!"
+            badge_class = "badge-success"
         else:
-            st.warning("⚠️ 깃허브에 assistant.gif 파일을 올려주세요!")
-            
-    with bubble_col:
-        dialogue_placeholder = st.empty()
-        dialogue_placeholder.info("👓 **김오피 (유럽 수배 1년차 똘망이)**\n\n선배님, 루팅 던져주시면 바로 랜드사 규격 엑셀 뽑아오겠습니다! ☕")
+            badge_text = "☕ 대기 중"
+            badge_class = "badge-idle"
+
+        img_tag = f'<img src="{media_b64}" alt="김똘망 사원">' if media_b64 else '<span style="color:white;font-size:24px;">👓</span>'
+
+        html_content = f"""
+        <div class="assistant-card">
+            <div class="gif-wrapper">
+                {img_tag}
+            </div>
+            <div class="speech-bubble">
+                <div class="assistant-header">
+                    <span class="assistant-name">👓 김똘망 사원 <span style="font-size:12px; font-weight:normal; color:#64748b;">(유럽 OP팀 막내)</span></span>
+                    <span class="assistant-badge {badge_class}">{badge_text}</span>
+                </div>
+                <div class="assistant-message">{message}</div>
+            </div>
+        </div>
+        """
+        ui_placeholder.markdown(html_content, unsafe_allow_html=True)
+
+    render_assistant_ui("idle")
 
     generate_btn = st.button("🚀 엑셀 일정표 생성하기", type="primary", use_container_width=True)
 
@@ -71,9 +209,9 @@ with col2:
         elif not routing_text.strip():
             st.warning("루팅 정보를 입력해 주세요.")
         else:
-            dialogue_placeholder.warning("👓 **김오피 (유럽 수배 1년차 똘망이)**\n\n선배님 접수했습니다! 안경 딱 고쳐 쓰고 바로 엑셀 뽑아옵니다!! 두다다다⌨️🔥")
+            render_assistant_ui("working", "선배님 접수했습니다! 안경 딱 고쳐 쓰고 바로 엑셀 뽑아옵니다!! 두다다다⌨️🔥")
             
-            with st.spinner("김오피가 정밀 규격으로 고속 제작 중..."):
+            with st.spinner("김똘망 사원이 정밀 규격으로 고속 제작 중..."):
                 try:
                     prompt = f"""
 당신은 15년 차 유럽 전문 랜드사의 수석 오퍼레이터입니다.
@@ -124,7 +262,6 @@ with col2:
   }}
 ]
 """
-                    # 고속 최신 모델 적용
                     response = client.models.generate_content(
                         model='gemini-3.5-flash-lite',
                         contents=prompt,
@@ -133,7 +270,6 @@ with col2:
                         )
                     )
                     
-                    # 마크다운 백틱 정제
                     raw_text = response.text.strip()
                     if "```" in raw_text:
                         raw_text = re.sub(r"^```(?:json)?\s*", "", raw_text, flags=re.MULTILINE)
@@ -266,7 +402,7 @@ with col2:
                     wb.save(output)
                     output.seek(0)
                     
-                    dialogue_placeholder.success("👓 **김오피 (유럽 수배 1년차 똘망이)**\n\n선배님! 요청하신 일정표 사내 표준 규격으로 완벽하게 뽑았습니다! 아래에서 받아주세요! 🎉")
+                    render_assistant_ui("success", "선배님! 요청하신 유럽 일정표 사내 표준 엑셀로 완성했습니다! 아래 다운로드 버튼을 눌러주세요! 🎉")
                     
                     final_title = tour_title.strip() if tour_title.strip() else "유럽투어"
                     file_name = f"{start_date.strftime('%Y-%m-%d')} {final_title} - 일정표.xlsx"
@@ -280,5 +416,5 @@ with col2:
                         use_container_width=True
                     )
                 except Exception as e:
-                    dialogue_placeholder.error("👓 **김오피 (유럽 수배 1년차 똘망이)**\n\n선배님 오류가 났습니다 ㅠㅠ 아래 에러 내용을 확인해 주세요.")
+                    render_assistant_ui("idle", f"헉 선배님 오류가 났습니다 ㅠㅠ: {str(e)}")
                     st.error(f"오류 상세: {str(e)}")
