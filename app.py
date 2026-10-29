@@ -7,14 +7,15 @@ import io
 import json
 import os
 import re
+import glob
 import base64
 from google import genai
 from google.genai import types
 
-# 1. 페이지 기본 설정
-st.set_page_config(page_title="유럽 랜드사 일정표 생성기", layout="wide", page_icon="🇪🇺")
+# 1. 페이지 설정
+st.set_page_config(page_title="유럽 랜드사 일정표 생성기 (Phase 2)", layout="wide", page_icon="🇪🇺")
 
-# 2. 커스텀 CSS (사내 전산망 스타일 & 반응형 카드)
+# 2. 커스텀 CSS
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Pretendard:wght@400;600;700&display=swap');
@@ -119,11 +120,59 @@ html, body, [class*="css"] {
     color: #334155;
     line-height: 1.5;
 }
+
+.db-info-box {
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 13px;
+    color: #1e40af;
+    margin-bottom: 12px;
+}
 </style>
 """, unsafe_allow_html=True)
 
-st.title("🇪🇺 유럽 일정표 자동 생성 시스템")
-st.caption("출발일과 루팅만 입력하면 사내 표준 서식 엑셀 파일로 바로 변환됩니다.")
+st.title("🇪🇺 유럽 일정표 자동 생성 시스템 (Phase 2)")
+st.caption("사내 표준 엑셀 DB를 기반으로 단문 요청 및 정밀 루팅을 규격 일정표로 변환합니다.")
+
+# 3. database 폴더 내 사내 엑셀 DB 자동 스캔 함수
+@st.cache_data(show_spinner=False)
+def load_company_database():
+    db_folder = "database"
+    excel_files = glob.glob(os.path.join(db_folder, "*.xlsx"))
+    
+    extracted_knowledge = []
+    file_list = []
+    
+    for filepath in excel_files:
+        filename = os.path.basename(filepath)
+        file_list.append(filename)
+        try:
+            wb = openpyxl.load_workbook(filepath, data_only=True)
+            ws = wb.active
+            
+            content_summary = []
+            for r in range(4, min(ws.max_row + 1, 120)):
+                city = ws.cell(r, 2).value
+                schedule = ws.cell(r, 5).value
+                hotel = ws.cell(r, 5).value if "HOTEL" in str(ws.cell(r, 5).value or "") else ""
+                
+                line_parts = []
+                if city:
+                    line_parts.append(f"도시: {str(city).strip()}")
+                if schedule:
+                    line_parts.append(f"내용: {str(schedule).strip()}")
+                if line_parts:
+                    content_summary.append(" | ".join(line_parts))
+            
+            extracted_knowledge.append(f"=== [사내 표준 파일: {filename}] ===\n" + "\n".join(content_summary[:80]))
+        except Exception:
+            continue
+            
+    return file_list, "\n\n".join(extracted_knowledge)
+
+db_files, db_context = load_company_database()
 
 # Gemini 클라이언트 초기화
 api_key = st.secrets.get("GEMINI_API_KEY")
@@ -132,32 +181,51 @@ client = genai.Client(api_key=api_key) if api_key else None
 col1, col2 = st.columns([1, 1])
 
 with col1:
-    st.subheader("1. 기본 정보 입력")
-    start_date = st.date_input("출발일자 선택", datetime.today())
-    tour_title = st.text_input("행사명", placeholder="예: 2026-12-05 SM투어) 북유럽 4국 10일 SK")
+    st.subheader("1. 입력 방식 선택")
     
-    routing_text = st.text_area(
-        "루팅 및 일정 입력 (복사-붙여넣기)",
-        height=320,
-        placeholder="""1. 인천/코펜하겐 (SK988, 23:35출발)
-2. 코펜하겐(관광, 뉘하운 유람선 탑승 필수)-DFDS탑승 - 오슬로 이동
-3. 오슬로(관광, 시청사 내부 필수)-게일로
-4. 게일로-베르겐(관광, 플뢰엔산 전망대 필수)
-5. 베르겐-구드방겐(송네피요르드 유람선 탑승)-플람하선(플람열차 탑승)-플라로 이동
-6. 플라-오슬로(관광, 뭉크미술관 필수) - 칼스타드
-7. 칼스타드-스톡홀름(관광, 드로트닝홀름 궁전, 바사박물관 필수)
-8. 스톡홀름(관광, 스톡홀름 시청사 및 왕실 무기고 필수) - 실자라인 탑승 - 헬싱키로 이동
-9. 헬싱키(하선 후 관광) - 공항이동 - 헬싱키/코펜하겐/인천 (SK1717 / SK987 스케쥴)
-10. 인천도착"""
+    if db_files:
+        st.markdown(f"""
+        <div class="db-info-box">
+            📚 <b>탑재된 사내 표준 엑셀 DB ({len(db_files)}개):</b><br>
+            {' • '.join([f'`{f}`' for f in db_files])}
+        </div>
+        """, unsafe_allow_html=True)
+    else:
+        st.info("💡 `database/` 폴더에 사내 엑셀 파일을 추가하면 자동으로 지식 DB가 확장됩니다.")
+
+    input_mode = st.radio(
+        "원하시는 작성 방식을 선택하세요:",
+        ["[옵션 A] 간편 단문 요청 (사내 DB 자동 매칭)", "[옵션 B] 직접 루팅 입력 (기존 방식)"],
+        horizontal=True
     )
+    
+    start_date = st.date_input("출발일자 선택", datetime.today())
+    tour_title = st.text_input("행사명 (선택)", placeholder="예: 2026-12-05 SM투어) 동유럽 3국 9일")
+    
+    if "[옵션 A]" in input_mode:
+        quick_prompt = st.text_input(
+            "간단 요청 입력",
+            placeholder="예: 동유럽 9일인데 프라하 2박 들어가게 짜줘 / 스포 9일짜리"
+        )
+        routing_input_text = f"[사용자 간편 요청]: {quick_prompt}"
+    else:
+        routing_text = st.text_area(
+            "루팅 및 일정 입력 (복사-붙여넣기)",
+            height=280,
+            placeholder="""1. 인천/프라하 (항공편)
+2. 프라하(시내 관광)
+3. 프라하-체스키크룸로프-비엔나
+4. 비엔나(쉔부른 궁전 관광)
+5. 비엔나-부다페스트
+..."""
+        )
+        routing_input_text = f"[사용자 직접 입력 루팅]:\n{routing_text}"
 
 with col2:
     st.subheader("2. AI 수배팀 작업 현황")
-    
     ui_placeholder = st.empty()
 
-    # 상태별 캐릭터(working.gif <-> done.gif) 전환 함수
-    def render_assistant_ui(status="working", message="선배님, 루팅 던져주시면 바로 랜드사 규격 엑셀 뽑아오겠습니다! ☕"):
+    def render_assistant_ui(status="working", message="선배님, 요청 주시면 사내 규격 엑셀 바로 뽑아오겠습니다! ☕"):
         if status == "success":
             badge_text = "🎉 제작 완료!"
             badge_class = "badge-success"
@@ -201,73 +269,63 @@ with col2:
         """
         ui_placeholder.markdown(html_content, unsafe_allow_html=True)
 
-    # 평소 대기 화면
-    render_assistant_ui("working", "선배님! 루팅 입력하고 버튼 눌러주시면 폭풍 타자 들어갑니다! ⌨️")
+    render_assistant_ui("working", "선배님! 1안이든 2안이든 사내 엑셀 DB 싹 훑어서 완벽히 만들어 올리겠습니다! ⌨️")
 
     generate_btn = st.button("🚀 엑셀 일정표 생성하기", type="primary", use_container_width=True)
 
     if generate_btn:
         if not api_key:
             st.error("설정(Secrets)에서 GEMINI_API_KEY가 등록되지 않았습니다.")
-        elif not routing_text.strip():
+        elif "[옵션 A]" in input_mode and not quick_prompt.strip():
+            st.warning("간단 요청 내용을 입력해 주세요.")
+        elif "[옵션 B]" in input_mode and not routing_text.strip():
             st.warning("루팅 정보를 입력해 주세요.")
         else:
-            render_assistant_ui("working", "선배님 접수했습니다! 안경 딱 고쳐 쓰고 바로 엑셀 뽑아옵니다!! 두다다다⌨️🔥")
+            render_assistant_ui("working", "사내 엑셀 DB 대조하면서 안경 고쳐 쓰고 정밀 작업 들어갑니다! ⌨️🔥")
             
-            with st.spinner("김똘망 사원이 사내 정밀 규격으로 고속 제작 중..."):
+            with st.spinner("김똘망 사원이 사내 DB를 분석하여 규격 엑셀을 제작 중입니다..."):
                 try:
-                    prompt = f"""
+                    system_prompt = f"""
 당신은 15년 차 유럽 전문 랜드사의 수석 오퍼레이터입니다.
-아래 루팅을 분석하여 한국 대형 여행사용 정밀 일정표 데이터를 JSON 배열로 출력하세요.
+아래에 제공된 [사내 표준 엑셀 DB]를 최우선 기준으로 삼아 요청받은 일정을 정밀 JSON 배열로 출력하세요.
 
-[입력된 루팅]
-{routing_text}
+[사내 표준 엑셀 DB]
+{db_context if db_context else "(등록된 사내 엑셀 DB 없음 - 랜드사 표준으로 생성)"}
 
-[세부 정제 및 절대 규칙]
-1. 도시명(city) 표기 규칙 (매우 중요):
-   - 같은 도시의 일정이 계속 이어지는 동안에는 city 칸을 무조건 빈칸("")으로 둡니다.
-   - 도시가 새롭게 바뀔 때만 그 행의 city 칸에 최초 1회만 적으세요.
-2. 시간란(time) 표기 규칙 (매우 엄격):
-   - '시간' 칸에는 오직 항공편 출발/도착 시간(HH:MM)과 관광 시작 행의 '전  일'만 기재합니다.
-   - 페리 탑승, 열차, 버스 이동, 관광지 등에는 일체 시간을 적지 말고 무조건 빈칸("")으로 비워두세요.
-   - '오전', '오후', '출발', '도착' 등의 한글 텍스트는 시간란에 절대 금지입니다.
-3. 교통편('전용차량') 규칙:
-   - 일반 육로 관광일의 경우 2행(조식 후 첫 관광/이동 시작 행)에만 transport="전용차량", time="전  일"을 단 1회 표기합니다.
-   - 이후의 모든 행(관광지, 식사, 중간이동, 공항이동 등)의 transport는 무조건 빈칸("")입니다.
-4. 일정 문구 작성 규칙:
-   - '핵심관광', '집중투어' 같은 수식어 절대 금지. 오직 '[도시명] 시내 관광' 형태로 작성하세요.
-   - 필수 명소를 포함하여 해당 도시의 대표 명소(▶)를 최소 4개 이상 풍성하게 구성하세요.
-   - 관광지는 반드시 '~한 [명소명]' 형태의 개별 행으로 분리 작성하세요.
-5. 식사(meals) 규칙:
-   - 기본적으로 "호텔식", "현지식"으로 통일하고 기내식 또는 미제공만 "-"로 처리합니다.
-6. 숙박 표기:
-   - 호텔: "HOTEL : ANY 4* HOTEL CLASS" (마지막 행="석식 후", 그 다음 행="호텔 투숙 및 휴식")
-   - 크루즈/페리: "CRUISE : DFDS SEAWAYS (SEAVIEW 2-BERTH)" 등
-   - 기내박: "HOTEL : 기내 숙박"
-   - 귀국일: hotel="" (마지막 행="인천 도착 후 해산")
+[입력 요청]
+{routing_input_text}
+
+[사내 DB 반영 및 작성 절대 규칙]
+1. 사내 DB 지식 최우선 적용:
+   - 사용자가 '간편 요청(옵션 A)'을 한 경우: 사내 DB 파일 중 가장 부합하는 템플릿의 전체 동선과 일자 구성을 뼈대로 채택하세요.
+   - 사용자가 '직접 루팅 입력(옵션 B)'을 한 경우: 입력된 동선을 따르되, 방문 도시의 관광지 문구(`▶ ~한 ...`)는 사내 DB의 표현과 필수 입장지를 그대로 가져와 적용하세요.
+2. 도시명(city) 표기 규칙:
+   - 같은 도시의 일정이 계속 이어지는 동안에는 city 칸을 무조건 빈칸("")으로 둡니다. 도시가 바뀔 때만 최초 1회 기재합니다.
+3. 시간란(time) 표기 규칙:
+   - 항공편 출발/도착 시간(HH:MM)과 조식 후 첫 관광 시작 행의 '전  일'만 기재합니다. 나머지는 무조건 빈칸("")입니다.
+4. 교통편('전용차량') 규칙:
+   - 일반 육로 관광일의 2행(첫 관광/이동 시작 행)에만 transport="전용차량", time="전  일"을 단 1회 표기합니다.
+5. 관광지 서식:
+   - 모든 대표 명소는 ' ▶ ~한 [명소명]' 형태의 개별 행으로 작성하세요.
+6. 식사 및 호텔:
+   - 식사는 호텔식/현지식 원칙. 호텔은 마지막 행="호텔 투숙 및 휴식", hotel="HOTEL : ANY 4* HOTEL CLASS" 규격을 따르세요.
 
 [출력 포맷: JSON 배열만 출력]
 [
   {{
-    "day": 7,
+    "day": 1,
     "rows": [
-      {{"city": "", "transport": "", "time": "", "schedule": "호텔 조식 후"}},
-      {{"city": "스톡홀름", "transport": "전용차량", "time": "전  일", "schedule": "스톡홀름 시내 관광"}},
-      {{"city": "", "transport": "", "time": "", "schedule": " ▶ 호화로운 스웨덴 왕실의 별궁 드로트닝홀름 궁전(내부)"}},
-      {{"city": "", "transport": "", "time": "", "schedule": " ▶ 현존하는 가장 오래된 전함 바사호가 전시된 바사 박물관(내부)"}},
-      {{"city": "", "transport": "", "time": "", "schedule": " ▶ 중세의 정취가 그대로 보존된 매력적인 감라스탄 구시가지"}},
-      {{"city": "", "transport": "", "time": "", "schedule": " ▶ 웅장한 바로크 양식의 스톡홀름 왕궁(외관)"}},
-      {{"city": "", "transport": "", "time": "", "schedule": "석식 후"}},
-      {{"city": "", "transport": "", "time": "", "schedule": "호텔 투숙 및 휴식"}}
+      {{"city": "인천", "transport": "", "time": "", "schedule": "인천 국제공항 제1여객터미널 집결"}},
+      {{"city": "", "transport": "항공편명", "time": "23:35", "schedule": "인천 출발"}}
     ],
-    "meals": ["호텔식", "현지식", "현지식"],
-    "hotel": "HOTEL : ANY 4* HOTEL CLASS"
+    "meals": ["-", "-", "기내식"],
+    "hotel": "HOTEL : 기내 숙박"
   }}
 ]
 """
                     response = client.models.generate_content(
                         model='gemini-3.5-flash-lite',
-                        contents=prompt,
+                        contents=system_prompt,
                         config=types.GenerateContentConfig(
                             response_mime_type="application/json"
                         )
@@ -405,7 +463,7 @@ with col2:
                     wb.save(output)
                     output.seek(0)
                     
-                    render_assistant_ui("success", "선배님! 요청하신 유럽 일정표 사내 표준 엑셀로 완성했습니다! 확인 부탁드립니다! 🙇‍♂️✨")
+                    render_assistant_ui("success", "선배님! 사내 표준 엑셀 DB와 완벽 동기화하여 제작 완료했습니다! 🙇‍♂️✨")
                     
                     final_title = tour_title.strip() if tour_title.strip() else "유럽투어"
                     file_name = f"{start_date.strftime('%Y-%m-%d')} {final_title} - 일정표.xlsx"
