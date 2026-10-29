@@ -7,6 +7,7 @@ import io
 import json
 import os
 import re
+import base64
 from google import genai
 from google.genai import types
 
@@ -14,6 +15,74 @@ from google.genai import types
 st.set_page_config(page_title="유럽 랜드사 일정표 생성기", layout="wide", page_icon="🇪🇺")
 st.title("🇪🇺 유럽 일정표 자동 생성 시스템")
 st.caption("출발일과 루팅만 입력하면 사내 표준 서식 엑셀 파일로 바로 변환됩니다.")
+
+# 똘망이 이미지 파일 찾기 및 Base64 인코딩
+found_img = None
+candidates = ["assistant.png", "assitant.png", "assistant.jpeg", "assistant.jpg"]
+for c in candidates:
+    if os.path.exists(c):
+        found_img = c
+        break
+
+img_b64 = ""
+if found_img:
+    with open(found_img, "rb") as f:
+        img_b64 = f"data:image/png;base64,{base64.b64encode(f.read()).decode()}"
+
+# 똘망이 2D 애니메이션 CSS (호흡 모션 & 고속 타이핑 진동 모션)
+st.markdown(f"""
+<style>
+.char-container {{
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    background: #f8fafc;
+    border: 2px solid #cbd5e1;
+    border-radius: 12px;
+    padding: 12px;
+    margin-bottom: 15px;
+}}
+.pixel-sprite {{
+    width: 140px;
+    height: 140px;
+    background-image: url('{img_b64}');
+    background-size: 280px 140px;
+    background-repeat: no-repeat;
+    border-radius: 10px;
+    border: 2px solid #3b82f6;
+    flex-shrink: 0;
+}}
+/* 대기 모드: 왼쪽 캐릭터 + 위아래 숨쉬기 모션 */
+.idle-sprite {{
+    background-position: 0px 0px;
+    animation: idle_breath 1.4s ease-in-out infinite alternate;
+}}
+/* 일하는 모드: 오른쪽 캐릭터 + 두다다다 타이핑 흔들림 */
+.working-sprite {{
+    background-position: -140px 0px;
+    animation: typing_shake 0.12s linear infinite alternate;
+    border-color: #ef4444;
+}}
+@keyframes idle_breath {{
+    0% {{ transform: translateY(0px) scale(1); }}
+    100% {{ transform: translateY(-6px) scale(1.02); }}
+}}
+@keyframes typing_shake {{
+    0% {{ transform: translate(1px, -2px) rotate(-1deg); }}
+    100% {{ transform: translate(-1px, 2px) rotate(1deg); }}
+}}
+.dialogue-box {{
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 12px 14px;
+    font-size: 14px;
+    line-height: 1.5;
+    flex-grow: 1;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}}
+</style>
+""", unsafe_allow_html=True)
 
 # Gemini 클라이언트 초기화
 api_key = st.secrets.get("GEMINI_API_KEY")
@@ -44,25 +113,23 @@ with col1:
 with col2:
     st.subheader("2. AI 수배팀 작업 현황")
     
-    # 똘망이 이미지 파일 확인 (assistant.png 및 철자 오타 assitant.png, jpg 모두 대응)
-    found_img = None
-    candidates = ["assistant.png", "assitant.png", "assistant.jpeg", "assistant.jpg"]
-    for c in candidates:
-        if os.path.exists(c):
-            found_img = c
-            break
+    char_placeholder = st.empty()
 
-    # 캐릭터와 말풍선 배치
-    img_col, bubble_col = st.columns([1, 2])
-    with img_col:
-        if found_img:
-            st.image(found_img, width=170)
-        else:
-            st.warning("⚠️ 깃허브에 assistant.png 파일이 보이지 않습니다.")
-            
-    with bubble_col:
-        dialogue_placeholder = st.empty()
-        dialogue_placeholder.info("👓 **김오피 (유럽 수배 1년차 똘망이)**\n\n선배님, 루팅 던져주시면 바로 랜드사 규격 엑셀 뽑아오겠습니다! ☕")
+    def show_character(mode="idle", message="선배님, 루팅 던져주시면 바로 랜드사 규격 엑셀 뽑아오겠습니다! ☕"):
+        sprite_class = "working-sprite" if mode == "working" else "idle-sprite"
+        badge = "🔥 폭풍 타이핑 중!" if mode == "working" else "☕ 여유롭게 대기 중"
+        html = f"""
+        <div class="char-container">
+            <div class="pixel-sprite {sprite_class}"></div>
+            <div class="dialogue-box">
+                <div style="font-weight: bold; color: #1e293b; margin-bottom: 4px;">👓 김오피 사원 ({badge})</div>
+                <div style="color: #334155;">{message}</div>
+            </div>
+        </div>
+        """
+        char_placeholder.markdown(html, unsafe_allow_html=True)
+
+    show_character("idle")
 
     generate_btn = st.button("🚀 엑셀 일정표 생성하기", type="primary", use_container_width=True)
 
@@ -72,9 +139,10 @@ with col2:
         elif not routing_text.strip():
             st.warning("루팅 정보를 입력해 주세요.")
         else:
-            dialogue_placeholder.warning("👓 **김오피 (유럽 수배 1년차 똘망이)**\n\n선배님 접수했습니다! 안경 고쳐 쓰고 정밀 일정표 제작 들어갑니다!! 👓🔥")
+            # 똘망이 열일 모드로 전환 & 화면 진동 시작
+            show_character("working", "선배님 접수했습니다! 안경 딱 고쳐 쓰고 바로 엑셀 뽑아옵니다!! 두다다다⌨️🔥")
             
-            with st.spinner("AI가 랜드사 정밀 규격(18.75pt / 테두리 / 호텔 음영)에 맞춰 제작 중입니다..."):
+            with st.spinner("김오피가 정밀 규격으로 고속 제작 중..."):
                 try:
                     prompt = f"""
 당신은 15년 차 유럽 전문 랜드사의 수석 오퍼레이터입니다.
@@ -95,19 +163,18 @@ with col2:
    - 일반 육로 관광일의 경우 2행(조식 후 첫 관광/이동 시작 행)에만 transport="전용차량", time="전  일"을 단 1회 표기합니다.
    - 이후의 모든 행(관광지, 식사, 중간이동, 공항이동 등)의 transport는 무조건 빈칸("")입니다.
 4. 일정 문구 작성 규칙:
-   - '핵심관광', '집중투어' 같은 수식어 절대 금지. 오직 '[도시명] 시내 관광' 형태로 작성하세요 (예: "스톡홀름 시내 관광").
+   - '핵심관광', '집중투어' 같은 수식어 절대 금지. 오직 '[도시명] 시내 관광' 형태로 작성하세요.
    - 필수 명소를 포함하여 해당 도시의 대표 명소(▶)를 최소 4개 이상 풍성하게 구성하세요.
    - 관광지는 반드시 '~한 [명소명]' 형태의 개별 행으로 분리 작성하세요.
 5. 식사(meals) 규칙:
-   - 특수 명칭(피요르드식, 선상식 등)은 쓰지 말고 기본적으로 "호텔식", "현지식"으로 통일하세요.
-   - 기내식 또는 미제공만 "-"로 처리합니다. (예: ["호텔식", "현지식", "현지식"])
+   - 기본적으로 "호텔식", "현지식"으로 통일하고 기내식 또는 미제공만 "-"로 처리합니다.
 6. 숙박 표기:
    - 호텔: "HOTEL : ANY 4* HOTEL CLASS" (마지막 행="석식 후", 그 다음 행="호텔 투숙 및 휴식")
-   - 크루즈/페리: "CRUISE : DFDS SEAWAYS (SEAVIEW 2-BERTH)" 등 (마지막 행="석식 후", 그 다음 행="선내 투숙 및 휴식")
-   - 기내박: "HOTEL : 기내 숙박" (별도 투숙 문구 없음)
+   - 크루즈/페리: "CRUISE : DFDS SEAWAYS (SEAVIEW 2-BERTH)" 등
+   - 기내박: "HOTEL : 기내 숙박"
    - 귀국일: hotel="" (마지막 행="인천 도착 후 해산")
 
-[반드시 아래 예시 포맷의 깔끔한 JSON 배열 구조로 응답]
+[출력 포맷: JSON 배열만 출력]
 [
   {{
     "day": 7,
@@ -126,16 +193,16 @@ with col2:
   }}
 ]
 """
-                    # Gemini 최신 모델 호출
+                    # 즉시 결과를 뱉는 초고속 모델로 복귀
                     response = client.models.generate_content(
-                        model='gemini-3.8-flash',
+                        model='gemini-2.5-flash-lite',
                         contents=prompt,
                         config=types.GenerateContentConfig(
                             response_mime_type="application/json"
                         )
                     )
                     
-                    # 무한 로딩 방지: 백틱 및 공백을 정밀하게 걷어내는 정제 로직
+                    # 응답 정제
                     raw_text = response.text.strip()
                     if "```" in raw_text:
                         raw_text = re.sub(r"^```(?:json)?\s*", "", raw_text, flags=re.MULTILINE)
@@ -163,7 +230,7 @@ with col2:
                     thin_side = Side(style="thin", color="000000")
                     med_side = Side(style="medium", color="000000")
                     
-                    # 1행: 타이틀바
+                    # 1행 타이틀바
                     full_title = tour_title.strip() if tour_title.strip() else f"{start_date.strftime('%Y-%m-%d')} 유럽투어 일정표"
                     ws.row_dimensions[1].height = 28.0
                     ws.cell(1, 1, full_title).font = font_title
@@ -175,10 +242,10 @@ with col2:
                         cell.border = Border(top=med_side, bottom=med_side, left=med_side if c==1 else None, right=med_side if c==7 else None)
                     ws.merge_cells("A1:G1")
                     
-                    # 2행: 간격행 (높이 13.0)
+                    # 2행 간격행
                     ws.row_dimensions[2].height = 13.0
                     
-                    # 3행: 헤더행
+                    # 3행 헤더행
                     headers = ["날짜", "도시", "교통편", "시간", "일정", "식사", ""]
                     ws.row_dimensions[3].height = 22.0
                     for c in range(1, 8):
@@ -234,7 +301,7 @@ with col2:
                         ws.cell(cur_row + 1, 1, date_str).alignment = align_center
                         ws.cell(cur_row + 2, 1, weekday_str).alignment = align_center
                         
-                        # 2~5열 세부 일정
+                        # 2~5열 일정
                         for idx, r_data in enumerate(rows_data):
                             r = cur_row + idx
                             if r_data.get("city"):
@@ -249,14 +316,14 @@ with col2:
                             cell_sc = ws.cell(r, 5, r_data.get("schedule", ""))
                             cell_sc.alignment = align_mid_left
                         
-                        # HOTEL 행
+                        # 호텔
                         if has_hotel:
                             h_row = cur_row + total_rows - 1
                             h_cell = ws.cell(h_row, 5, hotel_str)
                             h_cell.font = font_bold
                             h_cell.alignment = align_mid_left
                         
-                        # 식사 (조/중/석)
+                        # 식사
                         meal_labels = ["조", "중", "석"]
                         for m_idx in range(3):
                             ws.cell(cur_row + m_idx, 6, meal_labels[m_idx]).alignment = align_center
@@ -268,7 +335,8 @@ with col2:
                     wb.save(output)
                     output.seek(0)
                     
-                    dialogue_placeholder.success("👓 **김오피 (유럽 수배 1년차 똘망이)**\n\n선배님! 요청하신 유럽 일정표 사내 표준 엑셀로 완성했습니다! 아래 버튼으로 받아주세요! 🎉")
+                    # 작업 완료 후 대기 모드로 복귀 및 다운로드 제공
+                    show_character("idle", "선배님! 요청하신 일정표 사내 표준 규격으로 완벽하게 뽑았습니다! 아래에서 받아주세요! 🎉")
                     
                     final_title = tour_title.strip() if tour_title.strip() else "유럽투어"
                     file_name = f"{start_date.strftime('%Y-%m-%d')} {final_title} - 일정표.xlsx"
@@ -282,5 +350,5 @@ with col2:
                         use_container_width=True
                     )
                 except Exception as e:
-                    dialogue_placeholder.error("👓 **김오피 (유럽 수배 1년차 똘망이)**\n\n선배님 오류가 발생했습니다 ㅠㅠ 아래 에러 내용을 확인해 주세요.")
+                    show_character("idle", f"헉 선배님 오류가 났습니다 ㅠㅠ: {str(e)}")
                     st.error(f"오류 상세: {str(e)}")
