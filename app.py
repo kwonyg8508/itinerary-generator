@@ -161,7 +161,6 @@ with col2:
         if status == "success":
             badge_text = "🎉 제작 완료!"
             badge_class = "badge-success"
-            # 완료 시 done.gif 우선 탐색
             target_candidates = ["done.gif", "done.png", "assistant.gif", "working.gif"]
         elif status == "working":
             badge_text = "🔥 폭풍 작업 중"
@@ -202,7 +201,7 @@ with col2:
         """
         ui_placeholder.markdown(html_content, unsafe_allow_html=True)
 
-    # 평소 대기 화면 (열심히 준비 중)
+    # 평소 대기 화면
     render_assistant_ui("working", "선배님! 루팅 입력하고 버튼 눌러주시면 폭풍 타자 들어갑니다! ⌨️")
 
     generate_btn = st.button("🚀 엑셀 일정표 생성하기", type="primary", use_container_width=True)
@@ -213,7 +212,6 @@ with col2:
         elif not routing_text.strip():
             st.warning("루팅 정보를 입력해 주세요.")
         else:
-            # 작업 중 모드
             render_assistant_ui("working", "선배님 접수했습니다! 안경 딱 고쳐 쓰고 바로 엑셀 뽑아옵니다!! 두다다다⌨️🔥")
             
             with st.spinner("김똘망 사원이 사내 정밀 규격으로 고속 제작 중..."):
@@ -337,4 +335,89 @@ with col2:
                     
                     for item in parsed_days:
                         day_num = item.get("day", 1)
-                        curr_date = start_date + timedelta(days=day_num -
+                        curr_date = start_date + timedelta(days=day_num - 1)
+                        day_str = f"제{day_num:02d}일"
+                        date_str = curr_date.strftime("%m월 %d일")
+                        weekday_str = days_korean[curr_date.weekday()]
+                        
+                        rows_data = item.get("rows", [])
+                        hotel_str = item.get("hotel", "")
+                        meals = item.get("meals", ["-", "-", "-"])
+                        
+                        has_hotel = bool(hotel_str.strip())
+                        total_rows = max(len(rows_data), 3) + (1 if has_hotel else 0)
+                        
+                        for r_idx in range(total_rows):
+                            r = cur_row + r_idx
+                            ws.row_dimensions[r].height = 18.75
+                            is_last_row = (r_idx == total_rows - 1)
+                            
+                            for c in range(1, 8):
+                                cell = ws.cell(r, c)
+                                cell.font = font_body
+                                
+                                b_top = thin_side if (is_last_row and has_hotel) else None
+                                b_bottom = med_side if is_last_row else None
+                                b_left = med_side if c == 1 else thin_side
+                                b_right = med_side if c == 7 else thin_side
+                                
+                                if is_last_row and has_hotel:
+                                    cell.fill = fill_hotel
+                                cell.border = Border(top=b_top, bottom=b_bottom, left=b_left, right=b_right)
+                        
+                        # 1열 날짜
+                        ws.cell(cur_row, 1, day_str).font = font_bold
+                        ws.cell(cur_row, 1).alignment = align_center
+                        ws.cell(cur_row + 1, 1, date_str).alignment = align_center
+                        ws.cell(cur_row + 2, 1, weekday_str).alignment = align_center
+                        
+                        # 2~5열 일정
+                        for idx, r_data in enumerate(rows_data):
+                            r = cur_row + idx
+                            if r_data.get("city"):
+                                cell_city = ws.cell(r, 2, r_data.get("city"))
+                                cell_city.alignment = align_center
+                            if r_data.get("transport"):
+                                cell_tr = ws.cell(r, 3, r_data.get("transport"))
+                                cell_tr.alignment = align_center
+                            if r_data.get("time"):
+                                cell_tm = ws.cell(r, 4, r_data.get("time"))
+                                cell_tm.alignment = align_center
+                            cell_sc = ws.cell(r, 5, r_data.get("schedule", ""))
+                            cell_sc.alignment = align_mid_left
+                        
+                        # 호텔
+                        if has_hotel:
+                            h_row = cur_row + total_rows - 1
+                            h_cell = ws.cell(h_row, 5, hotel_str)
+                            h_cell.font = font_bold
+                            h_cell.alignment = align_mid_left
+                        
+                        # 식사
+                        meal_labels = ["조", "중", "석"]
+                        for m_idx in range(3):
+                            ws.cell(cur_row + m_idx, 6, meal_labels[m_idx]).alignment = align_center
+                            ws.cell(cur_row + m_idx, 7, meals[m_idx] if m_idx < len(meals) else "-").alignment = align_center
+                        
+                        cur_row += total_rows
+                    
+                    output = io.BytesIO()
+                    wb.save(output)
+                    output.seek(0)
+                    
+                    render_assistant_ui("success", "선배님! 요청하신 유럽 일정표 사내 표준 엑셀로 완성했습니다! 확인 부탁드립니다! 🙇‍♂️✨")
+                    
+                    final_title = tour_title.strip() if tour_title.strip() else "유럽투어"
+                    file_name = f"{start_date.strftime('%Y-%m-%d')} {final_title} - 일정표.xlsx"
+                    
+                    st.download_button(
+                        label="📥 완성된 사내 표준 엑셀 일정표 다운로드",
+                        data=output,
+                        file_name=file_name,
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        type="primary",
+                        use_container_width=True
+                    )
+                except Exception as e:
+                    render_assistant_ui("working", f"헉 선배님 오류가 났습니다 ㅠㅠ: {str(e)}")
+                    st.error(f"오류 상세: {str(e)}")
