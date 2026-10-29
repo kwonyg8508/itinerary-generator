@@ -7,7 +7,6 @@ import io
 import json
 import os
 import re
-import base64
 from google import genai
 from google.genai import types
 
@@ -15,74 +14,6 @@ from google.genai import types
 st.set_page_config(page_title="유럽 랜드사 일정표 생성기", layout="wide", page_icon="🇪🇺")
 st.title("🇪🇺 유럽 일정표 자동 생성 시스템")
 st.caption("출발일과 루팅만 입력하면 사내 표준 서식 엑셀 파일로 바로 변환됩니다.")
-
-# 똘망이 이미지 파일 찾기 및 Base64 인코딩
-found_img = None
-candidates = ["assistant.png", "assitant.png", "assistant.jpeg", "assistant.jpg"]
-for c in candidates:
-    if os.path.exists(c):
-        found_img = c
-        break
-
-img_b64 = ""
-if found_img:
-    with open(found_img, "rb") as f:
-        img_b64 = f"data:image/png;base64,{base64.b64encode(f.read()).decode()}"
-
-# 똘망이 2D 애니메이션 CSS (호흡 모션 & 고속 타이핑 진동 모션)
-st.markdown(f"""
-<style>
-.char-container {{
-    display: flex;
-    align-items: center;
-    gap: 15px;
-    background: #f8fafc;
-    border: 2px solid #cbd5e1;
-    border-radius: 12px;
-    padding: 12px;
-    margin-bottom: 15px;
-}}
-.pixel-sprite {{
-    width: 140px;
-    height: 140px;
-    background-image: url('{img_b64}');
-    background-size: 280px 140px;
-    background-repeat: no-repeat;
-    border-radius: 10px;
-    border: 2px solid #3b82f6;
-    flex-shrink: 0;
-}}
-/* 대기 모드: 왼쪽 캐릭터 + 위아래 숨쉬기 모션 */
-.idle-sprite {{
-    background-position: 0px 0px;
-    animation: idle_breath 1.4s ease-in-out infinite alternate;
-}}
-/* 일하는 모드: 오른쪽 캐릭터 + 두다다다 타이핑 흔들림 */
-.working-sprite {{
-    background-position: -140px 0px;
-    animation: typing_shake 0.12s linear infinite alternate;
-    border-color: #ef4444;
-}}
-@keyframes idle_breath {{
-    0% {{ transform: translateY(0px) scale(1); }}
-    100% {{ transform: translateY(-6px) scale(1.02); }}
-}}
-@keyframes typing_shake {{
-    0% {{ transform: translate(1px, -2px) rotate(-1deg); }}
-    100% {{ transform: translate(-1px, 2px) rotate(1deg); }}
-}}
-.dialogue-box {{
-    background: white;
-    border: 1px solid #e2e8f0;
-    border-radius: 8px;
-    padding: 12px 14px;
-    font-size: 14px;
-    line-height: 1.5;
-    flex-grow: 1;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-}}
-</style>
-""", unsafe_allow_html=True)
 
 # Gemini 클라이언트 초기화
 api_key = st.secrets.get("GEMINI_API_KEY")
@@ -113,23 +44,24 @@ with col1:
 with col2:
     st.subheader("2. AI 수배팀 작업 현황")
     
-    char_placeholder = st.empty()
+    # 움직이는 GIF를 최우선으로 탐색
+    found_media = None
+    candidates = ["assistant.gif", "assistant.png", "assitant.png", "assistant.jpeg", "assistant.jpg"]
+    for c in candidates:
+        if os.path.exists(c):
+            found_media = c
+            break
 
-    def show_character(mode="idle", message="선배님, 루팅 던져주시면 바로 랜드사 규격 엑셀 뽑아오겠습니다! ☕"):
-        sprite_class = "working-sprite" if mode == "working" else "idle-sprite"
-        badge = "🔥 폭풍 타이핑 중!" if mode == "working" else "☕ 여유롭게 대기 중"
-        html = f"""
-        <div class="char-container">
-            <div class="pixel-sprite {sprite_class}"></div>
-            <div class="dialogue-box">
-                <div style="font-weight: bold; color: #1e293b; margin-bottom: 4px;">👓 김오피 사원 ({badge})</div>
-                <div style="color: #334155;">{message}</div>
-            </div>
-        </div>
-        """
-        char_placeholder.markdown(html, unsafe_allow_html=True)
-
-    show_character("idle")
+    img_col, bubble_col = st.columns([1, 2])
+    with img_col:
+        if found_media:
+            st.image(found_media, width=170)
+        else:
+            st.warning("⚠️ 깃허브에 assistant.gif 파일을 올려주세요!")
+            
+    with bubble_col:
+        dialogue_placeholder = st.empty()
+        dialogue_placeholder.info("👓 **김오피 (유럽 수배 1년차 똘망이)**\n\n선배님, 루팅 던져주시면 바로 랜드사 규격 엑셀 뽑아오겠습니다! ☕")
 
     generate_btn = st.button("🚀 엑셀 일정표 생성하기", type="primary", use_container_width=True)
 
@@ -139,8 +71,7 @@ with col2:
         elif not routing_text.strip():
             st.warning("루팅 정보를 입력해 주세요.")
         else:
-            # 똘망이 열일 모드로 전환 & 화면 진동 시작
-            show_character("working", "선배님 접수했습니다! 안경 딱 고쳐 쓰고 바로 엑셀 뽑아옵니다!! 두다다다⌨️🔥")
+            dialogue_placeholder.warning("👓 **김오피 (유럽 수배 1년차 똘망이)**\n\n선배님 접수했습니다! 안경 딱 고쳐 쓰고 바로 엑셀 뽑아옵니다!! 두다다다⌨️🔥")
             
             with st.spinner("김오피가 정밀 규격으로 고속 제작 중..."):
                 try:
@@ -193,16 +124,16 @@ with col2:
   }}
 ]
 """
-                    # 즉시 결과를 뱉는 초고속 모델로 복귀
+                    # 고속 최신 모델 적용
                     response = client.models.generate_content(
-                        model='gemini-2.5-flash-lite',
+                        model='gemini-3.5-flash-lite',
                         contents=prompt,
                         config=types.GenerateContentConfig(
                             response_mime_type="application/json"
                         )
                     )
                     
-                    # 응답 정제
+                    # 마크다운 백틱 정제
                     raw_text = response.text.strip()
                     if "```" in raw_text:
                         raw_text = re.sub(r"^```(?:json)?\s*", "", raw_text, flags=re.MULTILINE)
@@ -335,8 +266,7 @@ with col2:
                     wb.save(output)
                     output.seek(0)
                     
-                    # 작업 완료 후 대기 모드로 복귀 및 다운로드 제공
-                    show_character("idle", "선배님! 요청하신 일정표 사내 표준 규격으로 완벽하게 뽑았습니다! 아래에서 받아주세요! 🎉")
+                    dialogue_placeholder.success("👓 **김오피 (유럽 수배 1년차 똘망이)**\n\n선배님! 요청하신 일정표 사내 표준 규격으로 완벽하게 뽑았습니다! 아래에서 받아주세요! 🎉")
                     
                     final_title = tour_title.strip() if tour_title.strip() else "유럽투어"
                     file_name = f"{start_date.strftime('%Y-%m-%d')} {final_title} - 일정표.xlsx"
@@ -350,5 +280,5 @@ with col2:
                         use_container_width=True
                     )
                 except Exception as e:
-                    show_character("idle", f"헉 선배님 오류가 났습니다 ㅠㅠ: {str(e)}")
+                    dialogue_placeholder.error("👓 **김오피 (유럽 수배 1년차 똘망이)**\n\n선배님 오류가 났습니다 ㅠㅠ 아래 에러 내용을 확인해 주세요.")
                     st.error(f"오류 상세: {str(e)}")
