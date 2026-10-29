@@ -11,10 +11,10 @@ import base64
 from google import genai
 from google.genai import types
 
-# 페이지 기본 설정
+# 1. 페이지 기본 설정
 st.set_page_config(page_title="유럽 랜드사 일정표 생성기", layout="wide", page_icon="🇪🇺")
 
-# 프리미엄 픽셀 UI 커스텀 스타일
+# 2. 커스텀 CSS (사내 전산망 스타일 & 반응형 카드)
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Pretendard:wght@400;600;700&display=swap');
@@ -27,17 +27,17 @@ html, body, [class*="css"] {
     background: #ffffff;
     border: 2px solid #e2e8f0;
     border-radius: 16px;
-    padding: 18px;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+    padding: 16px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.04);
     display: flex;
     align-items: center;
-    gap: 20px;
+    gap: 16px;
     margin-bottom: 20px;
 }
 
 .gif-wrapper {
-    width: 140px;
-    height: 120px;
+    width: 135px;
+    height: 125px;
     flex-shrink: 0;
     border-radius: 12px;
     overflow: hidden;
@@ -46,7 +46,6 @@ html, body, [class*="css"] {
     display: flex;
     align-items: center;
     justify-content: center;
-    box-shadow: inset 0 2px 4px rgba(0,0,0,0.2);
 }
 
 .gif-wrapper img {
@@ -61,7 +60,7 @@ html, body, [class*="css"] {
     background: #f8fafc;
     border: 1.5px solid #e2e8f0;
     border-radius: 12px;
-    padding: 14px 18px;
+    padding: 14px 16px;
     position: relative;
 }
 
@@ -95,7 +94,7 @@ html, body, [class*="css"] {
 .assistant-badge {
     font-size: 11px;
     font-weight: 600;
-    padding: 2px 8px;
+    padding: 3px 8px;
     border-radius: 20px;
 }
 
@@ -155,31 +154,35 @@ with col1:
 with col2:
     st.subheader("2. AI 수배팀 작업 현황")
     
-    # GIF/이미지 파일을 직접 인코딩하여 캐싱 없이 무한 재생 보장
-    found_media = None
-    for c in ["assistant.gif", "assistant.png", "assitant.png", "assistant.jpeg", "assistant.jpg"]:
-        if os.path.exists(c):
-            found_media = c
-            break
-
-    media_b64 = ""
-    if found_media:
-        with open(found_media, "rb") as f:
-            mime = "image/gif" if found_media.endswith(".gif") else "image/png"
-            media_b64 = f"data:{mime};base64,{base64.b64encode(f.read()).decode()}"
-
     ui_placeholder = st.empty()
 
-    def render_assistant_ui(status="idle", message="선배님, 루팅 던져주시면 바로 랜드사 규격 엑셀 뽑아오겠습니다! ☕"):
-        if status == "working":
-            badge_text = "🔥 폭풍 작업 중"
-            badge_class = "badge-working"
-        elif status == "success":
+    # 상태별 캐릭터(working.gif <-> done.gif) 전환 함수
+    def render_assistant_ui(status="working", message="선배님, 루팅 던져주시면 바로 랜드사 규격 엑셀 뽑아오겠습니다! ☕"):
+        if status == "success":
             badge_text = "🎉 제작 완료!"
             badge_class = "badge-success"
+            # 완료 시 done.gif 우선 탐색
+            target_candidates = ["done.gif", "done.png", "assistant.gif", "working.gif"]
+        elif status == "working":
+            badge_text = "🔥 폭풍 작업 중"
+            badge_class = "badge-working"
+            target_candidates = ["working.gif", "assistant.gif", "done.gif"]
         else:
             badge_text = "☕ 대기 중"
             badge_class = "badge-idle"
+            target_candidates = ["working.gif", "assistant.gif", "done.gif"]
+
+        media_file = None
+        for cand in target_candidates:
+            if os.path.exists(cand):
+                media_file = cand
+                break
+
+        media_b64 = ""
+        if media_file:
+            with open(media_file, "rb") as f:
+                mime = "image/gif" if media_file.endswith(".gif") else "image/png"
+                media_b64 = f"data:{mime};base64,{base64.b64encode(f.read()).decode()}"
 
         img_tag = f'<img src="{media_b64}" alt="김똘망 사원">' if media_b64 else '<span style="color:white;font-size:24px;">👓</span>'
 
@@ -199,7 +202,8 @@ with col2:
         """
         ui_placeholder.markdown(html_content, unsafe_allow_html=True)
 
-    render_assistant_ui("idle")
+    # 평소 대기 화면 (열심히 준비 중)
+    render_assistant_ui("working", "선배님! 루팅 입력하고 버튼 눌러주시면 폭풍 타자 들어갑니다! ⌨️")
 
     generate_btn = st.button("🚀 엑셀 일정표 생성하기", type="primary", use_container_width=True)
 
@@ -209,9 +213,10 @@ with col2:
         elif not routing_text.strip():
             st.warning("루팅 정보를 입력해 주세요.")
         else:
+            # 작업 중 모드
             render_assistant_ui("working", "선배님 접수했습니다! 안경 딱 고쳐 쓰고 바로 엑셀 뽑아옵니다!! 두다다다⌨️🔥")
             
-            with st.spinner("김똘망 사원이 정밀 규격으로 고속 제작 중..."):
+            with st.spinner("김똘망 사원이 사내 정밀 규격으로 고속 제작 중..."):
                 try:
                     prompt = f"""
 당신은 15년 차 유럽 전문 랜드사의 수석 오퍼레이터입니다.
@@ -332,89 +337,4 @@ with col2:
                     
                     for item in parsed_days:
                         day_num = item.get("day", 1)
-                        curr_date = start_date + timedelta(days=day_num - 1)
-                        day_str = f"제{day_num:02d}일"
-                        date_str = curr_date.strftime("%m월 %d일")
-                        weekday_str = days_korean[curr_date.weekday()]
-                        
-                        rows_data = item.get("rows", [])
-                        hotel_str = item.get("hotel", "")
-                        meals = item.get("meals", ["-", "-", "-"])
-                        
-                        has_hotel = bool(hotel_str.strip())
-                        total_rows = max(len(rows_data), 3) + (1 if has_hotel else 0)
-                        
-                        for r_idx in range(total_rows):
-                            r = cur_row + r_idx
-                            ws.row_dimensions[r].height = 18.75
-                            is_last_row = (r_idx == total_rows - 1)
-                            
-                            for c in range(1, 8):
-                                cell = ws.cell(r, c)
-                                cell.font = font_body
-                                
-                                b_top = thin_side if (is_last_row and has_hotel) else None
-                                b_bottom = med_side if is_last_row else None
-                                b_left = med_side if c == 1 else thin_side
-                                b_right = med_side if c == 7 else thin_side
-                                
-                                if is_last_row and has_hotel:
-                                    cell.fill = fill_hotel
-                                cell.border = Border(top=b_top, bottom=b_bottom, left=b_left, right=b_right)
-                        
-                        # 1열 날짜
-                        ws.cell(cur_row, 1, day_str).font = font_bold
-                        ws.cell(cur_row, 1).alignment = align_center
-                        ws.cell(cur_row + 1, 1, date_str).alignment = align_center
-                        ws.cell(cur_row + 2, 1, weekday_str).alignment = align_center
-                        
-                        # 2~5열 일정
-                        for idx, r_data in enumerate(rows_data):
-                            r = cur_row + idx
-                            if r_data.get("city"):
-                                cell_city = ws.cell(r, 2, r_data.get("city"))
-                                cell_city.alignment = align_center
-                            if r_data.get("transport"):
-                                cell_tr = ws.cell(r, 3, r_data.get("transport"))
-                                cell_tr.alignment = align_center
-                            if r_data.get("time"):
-                                cell_tm = ws.cell(r, 4, r_data.get("time"))
-                                cell_tm.alignment = align_center
-                            cell_sc = ws.cell(r, 5, r_data.get("schedule", ""))
-                            cell_sc.alignment = align_mid_left
-                        
-                        # 호텔
-                        if has_hotel:
-                            h_row = cur_row + total_rows - 1
-                            h_cell = ws.cell(h_row, 5, hotel_str)
-                            h_cell.font = font_bold
-                            h_cell.alignment = align_mid_left
-                        
-                        # 식사
-                        meal_labels = ["조", "중", "석"]
-                        for m_idx in range(3):
-                            ws.cell(cur_row + m_idx, 6, meal_labels[m_idx]).alignment = align_center
-                            ws.cell(cur_row + m_idx, 7, meals[m_idx] if m_idx < len(meals) else "-").alignment = align_center
-                        
-                        cur_row += total_rows
-                    
-                    output = io.BytesIO()
-                    wb.save(output)
-                    output.seek(0)
-                    
-                    render_assistant_ui("success", "선배님! 요청하신 유럽 일정표 사내 표준 엑셀로 완성했습니다! 아래 다운로드 버튼을 눌러주세요! 🎉")
-                    
-                    final_title = tour_title.strip() if tour_title.strip() else "유럽투어"
-                    file_name = f"{start_date.strftime('%Y-%m-%d')} {final_title} - 일정표.xlsx"
-                    
-                    st.download_button(
-                        label="📥 완성된 사내 표준 엑셀 일정표 다운로드",
-                        data=output,
-                        file_name=file_name,
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                        type="primary",
-                        use_container_width=True
-                    )
-                except Exception as e:
-                    render_assistant_ui("idle", f"헉 선배님 오류가 났습니다 ㅠㅠ: {str(e)}")
-                    st.error(f"오류 상세: {str(e)}")
+                        curr_date = start_date + timedelta(days=day_num -
