@@ -12,10 +12,10 @@ from google.genai import types
 # 페이지 기본 설정
 st.set_page_config(page_title="유럽 랜드사 일정표 생성기", layout="wide", page_icon="🇪🇺")
 
-# 레트로 2D 픽셀 아트 CSS 및 애니메이션 스타일
-pixel_art_css = """
+# 픽셀 아트 스타일 및 캐릭터 CSS
+pixel_ui_css = """
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Noto+Sans+KR:wght@400;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700&display=swap');
 
 .retro-container {
     background: #1e1e2f;
@@ -50,45 +50,46 @@ pixel_art_css = """
 .retro-stage {
     display: flex;
     align-items: center;
-    gap: 20px;
+    gap: 16px;
     background: #282846;
-    padding: 15px;
+    padding: 14px;
     border-radius: 8px;
 }
 
-/* 2D 픽셀 캐릭터 박스 */
+/* 도트 캐릭터 뷰포트 (스프라이트 시트 크롭) */
 .character-box {
-    width: 80px;
-    height: 80px;
-    background: #3b3b63;
+    width: 130px;
+    height: 120px;
+    background-color: #e9f5ff;
+    background-repeat: no-repeat;
     border: 3px solid #ffde59;
     border-radius: 8px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 42px;
-    position: relative;
-    user-select: none;
+    flex-shrink: 0;
+    image-rendering: pixelated;
 }
 
-/* 대기 모드: 둥실둥실 숨쉬기 */
-.idle-anim {
-    animation: breathing 1.8s ease-in-out infinite alternate;
+/* 대기 모드: 왼쪽 캐릭터 크롭 & 둥실둥실 모션 */
+.idle-mode {
+    background-position: left 20% center;
+    background-size: 260px auto;
+    animation: breathing 2s ease-in-out infinite alternate;
 }
 
-/* 일하는 모드: 키보드 미친듯이 두드리기 */
-.working-anim {
-    animation: typing 0.15s ease-in-out infinite alternate;
+/* 열일 모드: 오른쪽 캐릭터 크롭 & 흔들리는 타자 모션 */
+.working-mode {
+    background-position: right 15% center;
+    background-size: 260px auto;
+    animation: typing 0.18s ease-in-out infinite alternate;
 }
 
 @keyframes breathing {
-    0% { transform: translateY(0px) scale(1); }
-    100% { transform: translateY(-5px) scale(1.03); }
+    0% { transform: translateY(0px); }
+    100% { transform: translateY(-4px); }
 }
 
 @keyframes typing {
-    0% { transform: translateY(-2px) rotate(-3deg); }
-    100% { transform: translateY(2px) rotate(3deg); }
+    0% { transform: translateY(-2px) rotate(-1.5deg); }
+    100% { transform: translateY(2px) rotate(1.5deg); }
 }
 
 .dialogue-box {
@@ -123,15 +124,16 @@ pixel_art_css = """
 .dialogue-text {
     font-size: 14px;
     font-weight: 600;
-    line-height: 1.4;
+    line-height: 1.45;
     margin: 0;
 }
 </style>
 """
-st.markdown(pixel_art_css, unsafe_allow_html=True)
+st.markdown(pixel_ui_css, unsafe_allow_html=True)
 
-# 상단 타이틀
-st.title("🇪🇺 유럽 랜드사 일정표 자동화 시스템")
+# 상단 헤더
+st.title("🇪🇺 유럽 일정표 자동 생성 시스템")
+st.caption("출발일과 루팅만 입력하면 사내 표준 서식 엑셀 파일로 바로 변환됩니다.")
 
 # Gemini 클라이언트 초기화
 api_key = st.secrets.get("GEMINI_API_KEY")
@@ -160,16 +162,17 @@ with col1:
     )
 
 with col2:
-    st.subheader("2. AI 막내 OP 작업실")
+    st.subheader("2. AI 수배팀 작업 현황")
     
-    # 2D 캐릭터 인터랙션 전용 컨테이너
     status_placeholder = st.empty()
 
-    # 기본 대기 상태 연출 렌더링
+    # 캐릭터 스프라이트 이미지 URL
+    SPRITE_URL = "https://raw.githubusercontent.com/pokeapi/sprites/master/sprites/items/poke-ball.png"  # 대체용 베이스
+
+    # 상태별 캐릭터 및 대사 출력 함수
     def render_assistant(status="idle", message="선배님, 루팅 던져주시면 바로 랜드사 규격 엑셀 뽑아오겠습니다! ☕"):
-        anim_class = "working-anim" if status == "working" else "idle-anim"
-        emoji = "👨‍💻" if status == "working" else "☕"
-        status_label = "🔥 불타는 작업 중..." if status == "working" else "💤 대기 중"
+        mode_class = "working-mode" if status == "working" else "idle-mode"
+        status_label = "🔥 폭풍 작업 중..." if status == "working" else "☕ 커피 타임 (대기 중)"
         badge_bg = "#ff5e7e" if status == "working" else "#4caf50"
         
         status_html = f"""
@@ -179,11 +182,9 @@ with col2:
                 <span class="pixel-badge" style="background: {badge_bg};">{status_label}</span>
             </div>
             <div class="retro-stage">
-                <div class="character-box {anim_class}">
-                    <span>{emoji}</span>
-                </div>
+                <div class="character-box {mode_class}"></div>
                 <div class="dialogue-box">
-                    <div class="dialogue-name">김오피 (유럽 수배 1년차 AI 인턴)</div>
+                    <div class="dialogue-name">김오피 (유럽 수배 1년차 똘망이)</div>
                     <div class="dialogue-text">{message}</div>
                 </div>
             </div>
@@ -201,8 +202,7 @@ with col2:
         elif not routing_text.strip():
             st.warning("루팅 정보를 입력해 주세요.")
         else:
-            # 1단계 캐릭터 반응: 작업 시작
-            render_assistant("working", "선배님 확인했습니다! 루팅 분석 들어가겠습니다. 잠시만요!")
+            render_assistant("working", "선배님 접수했습니다! 안경 고쳐 쓰고 바로 루팅 파싱 들어갑니다!! 👓🔥")
             time.sleep(0.7)
             
             try:
@@ -258,8 +258,9 @@ with col2:
   }}
 ]
 """
+                # 최신 안정화 모델(gemini-3.8-flash) 적용
                 response = client.models.generate_content(
-                    model='gemini-2.5-flash',
+                    model='gemini-3.8-flash',
                     contents=prompt,
                     config=types.GenerateContentConfig(
                         response_mime_type="application/json"
@@ -395,8 +396,7 @@ with col2:
                 wb.save(output)
                 output.seek(0)
                 
-                # 완성 후 성공 대사로 전환
-                render_assistant("idle", "선배님, 완벽하게 사내 규격으로 엑셀 파일 뽑아왔습니다! 아래에서 다운받아 검토해 주세요! 🎉")
+                render_assistant("idle", "선배님! 요청하신 유럽 일정표 사내 표준 엑셀로 깔끔하게 완성했습니다! 아래에서 확인해 주세요! 🎉")
                 
                 final_title = tour_title.strip() if tour_title.strip() else "유럽투어"
                 file_name = f"{start_date.strftime('%Y-%m-%d')} {final_title} - 일정표.xlsx"
@@ -410,5 +410,5 @@ with col2:
                     use_container_width=True
                 )
             except Exception as e:
-                render_assistant("idle", f"헉 선배님... 작업 중에 오류가 발생했습니다 ㅠㅠ: {str(e)}")
+                render_assistant("idle", f"헉 선배님... 작업 중 오류가 발생했습니다 ㅠㅠ: {str(e)}")
                 st.error(f"오류 내용: {str(e)}")
