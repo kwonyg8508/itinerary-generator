@@ -294,9 +294,10 @@ with col2:
 
 [작성 규칙]
 1. 사내 DB 파일 중 가장 부합하는 템플릿의 전체 동선, 도시별 명소 문구(`▶ ~한 ...`), 식사, 호텔 규격을 그대로 적용하세요.
-2. 도시명(city)은 도시가 바뀔 때만 첫 행에 적고, 이어지는 일정은 빈칸("")으로 둡니다.
-3. 전일 육로 관광일의 2행에만 transport="전용차량", time="전  일"을 단 1회 표기합니다.
-4. 마지막 날 인천 도착 후에는 '자택 휴식' 등의 불필요한 행을 절대 생성하지 마세요.
+2. 명소 이름에 대괄호([])를 절대 사용하지 마세요.
+3. 도시명(city)은 도시가 바뀔 때만 첫 행에 적고, 이어지는 일정은 빈칸("")으로 둡니다.
+4. 전일 육로 관광일의 2행에만 transport="전용차량", time="전  일"을 단 1회 표기합니다.
+5. 마지막 날 인천 도착 후에는 '자택 휴식' 등의 불필요한 행을 절대 생성하지 마세요.
 """
                     else:
                         system_prompt = f"""
@@ -309,35 +310,36 @@ with col2:
 
 [핵심 작성 및 파싱 절대 규칙 - 위반 금지]
 1. 날짜(day) 단위 통합:
-   - 각 일자(제1일, 제2일...)는 반드시 하나의 객체로 만들고, 그 날의 모든 일정 행들을 'rows' 배열 안에 순서대로 넣으세요. 절대로 1개 일정을 여러 day로 쪼개지 마세요.
-2. 항공 스케줄(편명/시간/경유) 원본 100% 보존 및 매핑:
-   - 텍스트에 명시된 항공 편명(예: TK021, TK1845, TK1844, TK2010, TK020)은 반드시 해당 항공 이동 행의 transport 칸에 기재하세요.
-   - 시간(time) 칸에는 사용자가 기재한 '실제 시각(예: 20:45, 12:50, 07:35, 09:00, 17:05, 08:55)'만 정확히 적으세요.
-   - '오전', '오후', '저녁', '늦은 오후' 같은 단어는 time 칸에 절대 넣지 마세요 (무조건 빈칸("") 처리).
-   - 1일차 경유편의 경우:
-     * 행1: city="인천", transport="", time="", schedule="인천 국제공항 집결 후 출국 수속"
-     * 행2: city="", transport="TK021", time="", schedule="인천 출발 / 이스탄불 향발 (비행시간 약 11시간 30분)"
-     * 행3: city="이스탄불", transport="", time="", schedule="이스탄불 공항 도착 후 환승 대기"
-     * 행4: city="", transport="TK1845", time="", schedule="이스탄불 출발 / 아테네 향발"
-     * 행5: city="아테네", transport="", time="20:45", schedule="아테네 공항 도착 후 가이드 미팅"
-     * 행6: city="", transport="", time="", schedule="호텔 투숙 및 휴식"
-3. 교통편('전용차량') 및 시간('전  일') 표기 엄격 제한:
-   - 전일 육로 관광일의 경우: 오직 그 날의 2번째 행(조식 후 첫 이동/관광 시작 행)에만 단 1회 transport="전용차량", time="전  일"을 적습니다.
-   - 같은 날 다른 행에 transport="전용차량"을 중복으로 적거나 time에 '오후', '저녁'을 적는 행위를 금지합니다.
-4. 도시별 지리적 정확성 및 명소 풍성도 (각 도시마다 최소 3~5개 명소 필수):
-   - 각 도시/지역마다 대표 유료/무료 명소를 ' ▶ ~한 [명소명](내부/외관/조망)' 형식으로 풍성하게 개별 행으로 작성하세요.
-   - 타 도시의 명소를 엉뚱하게 섞지 마세요 (예: 아테네 일정에 이스탄불 성소피아를 넣는 행위 절대 금지!).
-   - 그리스 명소 기준: 파르테논 신전(내부), 에레크테이온 신전, 아크로폴리스 언덕, 근대 올림픽 경기장(조망), 신타그마 광장, 플라카 지구 등.
-   - 고린도 명소 기준: 고린도 운하(조망), 고대 고린도 유적지 및 아폴론 신전 등.
-   - 이스탄불 명소 기준: 블루모스크(내부), 아야소피아(외관 또는 내부), 톱카프 궁전(외관), 보스포러스 해협 유람선, 히포드롬 광장, 그랜드 바자르 등.
-   - 카파도키아 명소 기준: 괴레메 야외 박물관(내부), 데린쿠유 지하도시(내부), 우치히사르 요새(조망), 파샤바 계곡, 데브란트 계곡 등.
-   - 파묵칼레/에페소/쉬린제 명소 기준: 파묵칼레 석회붕 및 히에라폴리스, 에페소 켈수스 도서관, 원형 대극장, 하드리아누스 신전, 쉬린제 마을 등.
+   - 각 일자(제1일, 제2일...)는 반드시 하나의 객체로 만들고, 그 날의 모든 일정 행들을 'rows' 배열 안에 순서대로 넣으세요.
+2. 항공 스케줄 표기 엄격 규격 (출발 행과 도착 행 반드시 2행 분리):
+   - 항공 이동은 반드시 [출발 행]과 [도착 행]으로 각각 1행씩 나누어 작성합니다.
+   - [출발 행]: transport="항공편명", time="출발시간", schedule="~공항 출발 / ~공항 향발"
+   - [도착 행]: transport="", time="도착시간", schedule="~공항 도착 후 가이드 미팅 (또는 환승)"
+   - [예시 3일차 TK1844]:
+     행1: city="아테네", transport="", time="", schedule="호텔 조식 후 아테네 공항으로 이동"
+     행2: city="", transport="TK1844", time="", schedule="아테네 출발 / 이스탄불 향발"
+     행3: city="이스탄불", transport="", time="12:50", schedule="이스탄불 공항 도착 후 가이드 미팅"
+     행4: city="", transport="전용차량", time="전  일", schedule="이스탄불 시내로 이동하여 본격적인 투어 시작"
+     행5: city="", transport="", time="", schedule="▶ 명소..."
+   - [예시 4일차 TK2010 0735-0900]:
+     행1: city="이스탄불", transport="", time="", schedule="호텔 조식 후 공항으로 이동"
+     행2: city="", transport="TK2010", time="07:35", schedule="이스탄불 출발 / 카이세리(카파도키아) 향발"
+     행3: city="카파도키아", transport="", time="09:00", schedule="카파도키아 공항 도착 후 가이드 미팅"
+     행4: city="", transport="전용차량", time="전  일", schedule="기이한 화산암 지대 카파도키아 본격 탐방"
+     행5: city="", transport="", time="", schedule="▶ 명소..."
+   - '오전', '오후', '저녁' 같은 단어는 time 칸에 절대 금지 (무조건 빈칸("")).
+3. 대괄호([]) 절대 사용 금지:
+   - 명소 이름이나 텍스트 어디에도 [ ] 대괄호를 절대 넣지 마세요.
+   - 나쁜 예: ▶ 고대 그리스의 걸작 [파르테논 신전](내부) 관람
+   - 좋은 예: ▶ 고대 그리스의 걸작 파르테논 신전(내부) 관람
+4. 명소 행 시작 규칙:
+   - 항공 이동이 있는 날은 반드시 공항 도착 및 가이드 미팅 행이 끝난 바로 다음 행부터 본격적인 ' ▶ ~' 관광 명소 행이 시작되어야 합니다.
 5. 마지막 날 인천 도착 규격:
    - 마지막 날 rows는 1개 행만 작성: city="인천", transport="", time="08:55", schedule="인천 국제공항 도착 후 해산"
    - hotel은 빈칸("") 처리.
 """
 
-                    # 엄격한 JSON 스키마 강제 정의 (구조 변형 원천 방지)
+                    # 엄격한 JSON 스키마
                     json_schema = {
                         "type": "ARRAY",
                         "items": {
@@ -383,7 +385,7 @@ with col2:
                     
                     parsed_raw = json.loads(raw_text)
                     
-                    # Day 병합 보정 로직 (혹시라도 분리되어 반환된 day들을 안전하게 합침)
+                    # Day 병합 보정 로직
                     day_dict = {}
                     for item in parsed_raw:
                         d_num = item.get("day", 1)
@@ -395,11 +397,13 @@ with col2:
                                 "hotel": item.get("hotel") or ""
                             }
                         for r_item in item.get("rows", []):
-                            # 유효한 내용이 있는 행만 추가
                             if r_item.get("schedule") or r_item.get("city") or r_item.get("transport"):
+                                # 혹시 남아있을 수 있는 대괄호 강제 제거
+                                sc_clean = str(r_item.get("schedule") or "").replace("[", "").replace("]", "")
+                                r_item["schedule"] = sc_clean
                                 day_dict[d_num]["rows"].append(r_item)
                         if item.get("hotel"):
-                            day_dict[d_num]["hotel"] = item.get("hotel")
+                            day_dict[d_num]["hotel"] = str(item.get("hotel")).replace("[", "").replace("]", "")
                         if item.get("meals") and any(m != "-" for m in item.get("meals")):
                             day_dict[d_num]["meals"] = item.get("meals")
 
@@ -415,7 +419,9 @@ with col2:
                     font_header = Font(name="맑은 고딕", size=10, bold=True)
                     font_body = Font(name="맑은 고딕", size=9)
                     font_bold = Font(name="맑은 고딕", size=9, bold=True)
-                    font_notice = Font(name="맑은 고딕", size=9, italic=True, color="555555")
+                    
+                    # 최하단 안내 문구: 11포인트, 붉은색, 볼드체
+                    font_notice_red = Font(name="맑은 고딕", size=11, bold=True, color="FF0000")
                     
                     fill_title = PatternFill(start_color="FFFFCC", end_color="FFFFCC", fill_type="solid")
                     fill_hotel = PatternFill(start_color="EFEFEF", end_color="EFEFEF", fill_type="solid")
@@ -471,7 +477,6 @@ with col2:
                         hotel_str = str(item.get("hotel") or "").strip()
                         meals = item.get("meals") or ["-", "-", "-"]
                         
-                        # 마지막 날 인천 도착 시 호텔칸 제외
                         is_last_day = (item_idx == total_days_count - 1)
                         first_row_text = str(rows_data[0].get("schedule", "")) if len(rows_data) > 0 else ""
                         is_incheon_arrival = "인천" in first_row_text and "도착" in first_row_text
@@ -534,11 +539,11 @@ with col2:
                         
                         cur_row += total_rows
                     
-                    # 최하단 안내 문구 추가
+                    # 최하단 안내 문구: 한 줄 띄고 11포인트 붉은색 볼드체
                     notice_row = cur_row + 1
-                    ws.row_dimensions[notice_row].height = 20.0
+                    ws.row_dimensions[notice_row].height = 22.0
                     notice_cell = ws.cell(notice_row, 1, "* 상기 일정은 현지 사정에 따라 변경될 수 있습니다 *")
-                    notice_cell.font = font_notice
+                    notice_cell.font = font_notice_red
                     notice_cell.alignment = align_center
                     ws.merge_cells(start_row=notice_row, start_column=1, end_row=notice_row, end_column=7)
                     
@@ -546,7 +551,7 @@ with col2:
                     wb.save(output)
                     output.seek(0)
                     
-                    render_assistant_ui("success", "선배님! JSON 스키마를 고정하여 날짜 쪼개짐과 빈칸 버그를 완벽히 해결했습니다! 🙇‍♂️✨")
+                    render_assistant_ui("success", "선배님! 대괄호 제거, 항공 출발/도착 2행 분리, 11pt 붉은색 안내문까지 칼적용했습니다! 🙇‍♂️✨")
                     
                     final_title = tour_title.strip() if tour_title.strip() else "유럽투어"
                     file_name = f"{start_date.strftime('%Y-%m-%d')} {final_title} - 일정표.xlsx"
