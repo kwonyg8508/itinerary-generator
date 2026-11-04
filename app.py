@@ -134,7 +134,7 @@ html, body, [class*="css"] {
 """, unsafe_allow_html=True)
 
 st.title("🇪🇺 유럽 일정표 자동 생성 시스템 (Stable)")
-st.caption("사내 표준 서식과 고정 룰셋을 완벽 적용한 고속 생성 버전입니다.")
+st.caption("503 트래픽 과부하 시 예비 모델 자동 전환 및 사내 랜드사 표준 서식을 적용합니다.")
 
 # 3. database 폴더 내 사내 엑셀 DB 자동 스캔
 @st.cache_data(show_spinner=False)
@@ -265,7 +265,7 @@ with col2:
         """
         ui_placeholder.markdown(html_content, unsafe_allow_html=True)
 
-    render_assistant_ui("idle", "선배님! 대기 없이 번개 속도로 엑셀 뽑아올 준비 완료했습니다! ⌨️")
+    render_assistant_ui("idle", "선배님! 옵션에 맞춰 최적화된 엔진으로 작업 준비 완료했습니다! ⌨️")
 
     generate_btn = st.button("🚀 엑셀 일정표 생성하기", type="primary", use_container_width=True)
 
@@ -277,7 +277,7 @@ with col2:
         elif "[옵션 B]" in input_mode and not routing_text.strip():
             st.warning("루팅 정보를 입력해 주세요.")
         else:
-            render_assistant_ui("working", "지체 없이 고속으로 규격 일정표를 생성하고 있습니다! ⚡🔥")
+            render_assistant_ui("working", "서버 트래픽을 분산 처리하며 고속으로 규격 엑셀을 조립 중입니다! ⚡🔥")
             
             with st.spinner("김똘망 사원이 엑셀을 정밀하게 제작 중입니다..."):
                 try:
@@ -366,16 +366,30 @@ with col2:
                         }
                     }
 
-                    # 단일 호출로 2~3초 만에 즉시 완료
-                    response = client.models.generate_content(
-                        model='gemini-3.8-flash',
-                        contents=system_prompt,
-                        config=types.GenerateContentConfig(
-                            response_mime_type="application/json",
-                            response_schema=json_schema
-                        )
-                    )
-                    
+                    # 503 트래픽 과부하 방지: 안정적인 상용 모델 순환 폴백(Fallback) 구조
+                    candidate_models = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-2.5-flash']
+                    response = None
+                    last_error = None
+
+                    for model_name in candidate_models:
+                        try:
+                            response = client.models.generate_content(
+                                model=model_name,
+                                contents=system_prompt,
+                                config=types.GenerateContentConfig(
+                                    response_mime_type="application/json",
+                                    response_schema=json_schema
+                                )
+                            )
+                            if response and response.text:
+                                break
+                        except Exception as e:
+                            last_error = e
+                            continue
+
+                    if not response or not response.text:
+                        raise Exception(f"일시적인 AI 서버 과부하가 발생했습니다: {last_error}")
+
                     raw_text = response.text.strip()
                     if "```" in raw_text:
                         raw_text = re.sub(r"^```(?:json)?\s*", "", raw_text, flags=re.MULTILINE)
@@ -408,7 +422,7 @@ with col2:
 
                     parsed_days = [day_dict[k] for k in sorted(day_dict.keys())]
 
-                    # 2. 강력한 실무 파이썬 후처리 (이동 도시 제거, 오전/오후 제거, 호텔 2행 보정 등)
+                    # 2. 강력한 실무 파이썬 후처리
                     valid_meals = ["호텔식", "현지식", "한   식", "중국식", "기내식", "-"]
                     turkey_keywords = ["이스탄불", "카파도키아", "파묵칼레", "마니사", "쉬린제", "에페소", "터키", "튀르키예", "카이세리", "네브셰히르", "안탈리아", "쿠샤다시"]
 
@@ -667,7 +681,7 @@ with col2:
                     wb.save(output)
                     output.seek(0)
                     
-                    render_assistant_ui("success", "선배님! 멈춤 현상 원천 차단하고 사내 규격 일정표 생성을 마쳤습니다! 🙇‍♂️✨")
+                    render_assistant_ui("success", "선배님! 트래픽 과부하 방지 및 사내 정통 서식을 완벽 적용하여 출력을 완료했습니다! 🙇‍♂️✨")
                     
                     final_title = tour_title.strip() if tour_title.strip() else "유럽투어"
                     file_name = f"{start_date.strftime('%Y-%m-%d')} {final_title} - 일정표.xlsx"
