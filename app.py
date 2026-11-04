@@ -134,7 +134,7 @@ html, body, [class*="css"] {
 """, unsafe_allow_html=True)
 
 st.title("🇪🇺 유럽 일정표 자동 생성 시스템 (Phase 2)")
-st.caption("사내 표준 엑셀 DB를 기반으로 단문 요청 및 정밀 루팅을 규격 일정표로 변환합니다.")
+st.caption("사내 표준 DB 매칭과 정밀 항공 루팅 생성 모드를 완전히 분리하여 운영합니다.")
 
 # 3. database 폴더 내 사내 엑셀 DB 자동 스캔 함수
 @st.cache_data(show_spinner=False)
@@ -156,8 +156,6 @@ def load_company_database():
             for r in range(4, min(ws.max_row + 1, 120)):
                 city = ws.cell(r, 2).value
                 schedule = ws.cell(r, 5).value
-                hotel = ws.cell(r, 5).value if "HOTEL" in str(ws.cell(r, 5).value or "") else ""
-                
                 line_parts = []
                 if city:
                     line_parts.append(f"도시: {str(city).strip()}")
@@ -183,43 +181,41 @@ col1, col2 = st.columns([1, 1])
 with col1:
     st.subheader("1. 입력 방식 선택")
     
-    if db_files:
-        st.markdown(f"""
-        <div class="db-info-box">
-            📚 <b>탑재된 사내 표준 엑셀 DB ({len(db_files)}개):</b><br>
-            {' • '.join([f'`{f}`' for f in db_files])}
-        </div>
-        """, unsafe_allow_html=True)
-    else:
-        st.info("💡 `database/` 폴더에 사내 엑셀 파일을 추가하면 자동으로 지식 DB가 확장됩니다.")
-
     input_mode = st.radio(
-        "원하시는 작성 방식을 선택하세요:",
-        ["[옵션 A] 간편 단문 요청 (사내 DB 자동 매칭)", "[옵션 B] 직접 루팅 입력 (기존 방식)"],
+        "작성 방식을 선택하세요:",
+        ["[옵션 A] 간편 단문 요청 (사내 DB 자동 매칭)", "[옵션 B] 직접 루팅 입력 (정밀 항공/일정 파싱)"],
         horizontal=True
     )
     
+    if "[옵션 A]" in input_mode:
+        if db_files:
+            st.markdown(f"""
+            <div class="db-info-box">
+                📚 <b>연동된 사내 엑셀 DB ({len(db_files)}개):</b><br>
+                {' • '.join([f'`{f}`' for f in db_files])}
+            </div>
+            """, unsafe_allow_html=True)
+        else:
+            st.info("💡 `database/` 폴더에 사내 엑셀이 있을 경우 자동 매핑됩니다.")
+
     start_date = st.date_input("출발일자 선택", datetime.today())
-    tour_title = st.text_input("행사명 (선택)", placeholder="예: 2026-12-05 SM투어) 동유럽 3국 9일")
+    tour_title = st.text_input("행사명 (선택)", placeholder="예: 2026-12-05 터키/그리스 9일 TK")
     
     if "[옵션 A]" in input_mode:
         quick_prompt = st.text_input(
             "간단 요청 입력",
             placeholder="예: 동유럽 9일인데 프라하 2박 들어가게 짜줘 / 스포 9일짜리"
         )
-        routing_input_text = f"[사용자 간편 요청]: {quick_prompt}"
     else:
         routing_text = st.text_area(
             "루팅 및 일정 입력 (복사-붙여넣기)",
             height=280,
-            placeholder="""1. 인천/프라하 (항공편)
-2. 프라하(시내 관광)
-3. 프라하-체스키크룸로프-비엔나
-4. 비엔나(쉔부른 궁전 관광)
-5. 비엔나-부다페스트
+            placeholder="""1. 인천/이스탄불/아테네 (TK021 / TK1845 편) 20:45분 아테네 도착
+2. 아테네(관광) - 고린도(관광) - 아테네
+3. 아테네 / 이스탄불 (TK1844 12:50분 도착) 후 이스탄불 시내 관광
+4. 이스탄불 / 카파도키아 (TK2010 0735-0900) - 카파도키아 관광
 ..."""
         )
-        routing_input_text = f"[사용자 직접 입력 루팅]:\n{routing_text}"
 
 with col2:
     st.subheader("2. AI 수배팀 작업 현황")
@@ -269,7 +265,7 @@ with col2:
         """
         ui_placeholder.markdown(html_content, unsafe_allow_html=True)
 
-    render_assistant_ui("working", "선배님! 1안이든 2안이든 사내 엑셀 DB 싹 훑어서 완벽히 만들어 올리겠습니다! ⌨️")
+    render_assistant_ui("idle", "선배님! 옵션에 맞춰 최적화된 엔진으로 작업 준비 완료했습니다! ⌨️")
 
     generate_btn = st.button("🚀 엑셀 일정표 생성하기", type="primary", use_container_width=True)
 
@@ -281,48 +277,77 @@ with col2:
         elif "[옵션 B]" in input_mode and not routing_text.strip():
             st.warning("루팅 정보를 입력해 주세요.")
         else:
-            render_assistant_ui("working", "사내 엑셀 DB 대조하면서 안경 고쳐 쓰고 정밀 작업 들어갑니다! ⌨️🔥")
+            render_assistant_ui("working", "입력 데이터 정밀 분석 및 행별 서식 매핑 작업 진행 중입니다! ⌨️🔥")
             
-            with st.spinner("김똘망 사원이 사내 DB를 분석하여 규격 엑셀을 제작 중입니다..."):
+            with st.spinner("김똘망 사원이 규격 엑셀을 꼼꼼하게 제작 중입니다..."):
                 try:
-                    system_prompt = f"""
+                    # 옵션에 따라 프롬프트 물리적 완전 분리
+                    if "[옵션 A]" in input_mode:
+                        system_prompt = f"""
 당신은 15년 차 유럽 전문 랜드사의 수석 오퍼레이터입니다.
-아래에 제공된 [사내 표준 엑셀 DB]를 최우선 기준으로 삼아 요청받은 일정을 정밀 JSON 배열로 출력하세요.
+아래 제공된 [사내 표준 엑셀 DB]를 최우선 기준으로 삼아 요청받은 일정을 JSON 배열로 작성하세요.
 
 [사내 표준 엑셀 DB]
-{db_context if db_context else "(등록된 사내 엑셀 DB 없음 - 랜드사 표준으로 생성)"}
+{db_context if db_context else "(사내 DB 없음 - 표준 규격 준수)"}
 
-[입력 요청]
-{routing_input_text}
+[사용자 요청]
+{quick_prompt}
 
-[사내 DB 반영 및 작성 절대 규칙]
-1. 사내 DB 지식 최우선 적용:
-   - 사용자가 '간편 요청(옵션 A)'을 한 경우: 사내 DB 파일 중 가장 부합하는 템플릿의 전체 동선과 일자 구성을 뼈대로 채택하세요.
-   - 사용자가 '직접 루팅 입력(옵션 B)'을 한 경우: 입력된 동선을 따르되, 방문 도시의 관광지 문구(`▶ ~한 ...`)는 사내 DB의 표현과 필수 입장지를 그대로 가져와 적용하세요.
-2. 도시명(city) 표기 규칙:
-   - 같은 도시의 일정이 계속 이어지는 동안에는 city 칸을 무조건 빈칸("")으로 둡니다. 도시가 바뀔 때만 최초 1회 기재합니다.
-3. 시간란(time) 표기 규칙:
-   - 항공편 출발/도착 시간(HH:MM)과 조식 후 첫 관광 시작 행의 '전  일'만 기재합니다. 나머지는 무조건 빈칸("")입니다.
-4. 교통편('전용차량') 규칙:
-   - 일반 육로 관광일의 2행(첫 관광/이동 시작 행)에만 transport="전용차량", time="전  일"을 단 1회 표기합니다.
-5. 관광지 서식:
-   - 모든 대표 명소는 ' ▶ ~한 [명소명]' 형태의 개별 행으로 작성하세요.
-6. 식사 및 호텔:
-   - 식사는 호텔식/현지식 원칙. 호텔은 마지막 행="호텔 투숙 및 휴식", hotel="HOTEL : ANY 4* HOTEL CLASS" 규격을 따르세요.
+[작성 규칙]
+1. 사내 DB 파일 중 가장 부합하는 템플릿의 전체 동선, 도시별 명소 문구(`▶ ~한 ...`), 식사, 호텔 규격을 그대로 적용하세요.
+2. 도시명(city)은 도시가 바뀔 때만 첫 행에 적고, 이어지는 일정은 빈칸("")으로 둡니다.
+3. 전일 육로 관광일의 2행에만 transport="전용차량", time="전  일"을 단 1회 표기합니다.
+4. 출력 포맷은 반드시 지정된 JSON 규격만 출력하세요.
+"""
+                    else:
+                        system_prompt = f"""
+당신은 15년 차 유럽 전문 랜드사의 수석 오퍼레이터입니다.
+사용자가 입력한 아래 루팅 정보를 바탕으로, 대형 여행사 제출용 최고급 상세 일정표를 JSON 배열로 작성하세요.
+사내 DB에 얽매이지 말고, 텍스트에 적힌 항공 편명/시간/경유 동선을 100% 보존하고 각 도시 명소를 풍성하게 확장하세요.
 
-[출력 포맷: JSON 배열만 출력]
+[사용자 입력 루팅 원본]
+{routing_text}
+
+[핵심 작성 및 파싱 절대 규칙 - 위반 금지]
+1. 항공 스케줄(편명/시간/경유) 원본 100% 반영:
+   - 텍스트에 있는 항공 편명(예: TK021, TK1845, TK2010, TK020)과 시간(예: 20:45, 12:50, 07:35, 17:05 등)을 절대로 '항공편명' 따위로 뭉개지 말고 transport와 time 칸에 정확히 적으세요.
+   - 경유지가 있을 경우 반드시 [출발 공항] -> [경유지 환승] -> [최종 도착지]를 각각 별도 행으로 상세히 분리하세요.
+   - 예시 (1일차 경유편):
+     * 행1: city="인천", transport="", time="", schedule="인천 국제공항 집결 후 출국 수속"
+     * 행2: city="", transport="TK021", time="", schedule="인천 출발 / 이스탄불 향발 (기내식 2회, 비행시간 약 11시간 30분)"
+     * 행3: city="이스탄불", transport="", time="", schedule="이스탄불 국제공항 도착 후 환승 대기"
+     * 행4: city="", transport="TK1845", time="", schedule="이스탄불 출발 / 아테네 향발"
+     * 행5: city="아테네", transport="", time="20:45", schedule="아테네 국제공항 도착 후 가이드 미팅"
+     * 행6: city="", transport="", time="", schedule="호텔 투숙 및 휴식"
+
+2. 도시별 지리적 정확성 및 명소 풍성도 (각 도시마다 최소 3~5개 명소 필수):
+   - 대충 1~2줄로 축약하지 마세요. 각 도시/지역마다 대표 유료/무료 명소를 ' ▶ ~한 [명소명](내부/외관/조망)' 형식으로 개별 행으로 작성하세요.
+   - 타 도시의 명소를 엉뚱하게 섞지 마세요 (예: 아테네 일정에 이스탄불 성소피아를 넣는 행위 절대 엄금!).
+   - 그리스 명소 기준: 파르테논 신전(내부), 에레크테이온 신전, 아크로폴리스 언덕, 근대 올림픽 경기장(조망), 신타그마 광장, 플라카 지구 등.
+   - 고린도 명소 기준: 고린도 운하(조망), 고대 고린도 유적지 및 아폴론 신전 등.
+   - 이스탄불 명소 기준: 블루모스크(술탄아흐메트)(내부), 아야소피아(외관 또는 내부), 톱카프 궁전(외관), 보스포러스 해협 유람선, 히포드롬 광장, 그랜드 바자르 등.
+   - 카파도키아 명소 기준: 괴레메 야외 박물관(내부), 데린쿠유 지하도시(내부), 우치히사르 요새(조망), 파샤바 계곡, 데브란트 계곡 등.
+   - 파묵칼레/에페소/쉬린제 명소 기준: 파묵칼레 석회붕 및 히에라폴리스, 에페소 켈수스 도서관, 원형 대극장, 하드리아누스 신전, 쉬린제 와인 시음 등.
+
+3. 표기 규격:
+   - 도시명(city): 도시가 변경되는 첫 행에만 기재하고, 같은 도시 일정이 이어지면 빈칸("").
+   - 교통편(transport): 전일 육로 관광일에는 2행에 "전용차량", time은 "전  일" 1회 기재. 항공 이동 시에는 해당 항공편명과 시간 정확히 기재.
+   - 호텔/식사: 현지 랜드사 표준에 맞게 조/중/석 및 호텔명을 정확히 표기 (마지막 행은 항상 '호텔 투숙 및 휴식', hotel은 'HOTEL : ANY 4* HOTEL CLASS' 규격).
+
+[출력 포맷: 순수 JSON 배열만 출력]
 [
   {{
     "day": 1,
     "rows": [
-      {{"city": "인천", "transport": "", "time": "", "schedule": "인천 국제공항 제1여객터미널 집결"}},
-      {{"city": "", "transport": "항공편명", "time": "23:35", "schedule": "인천 출발"}}
+      {{"city": "인천", "transport": "", "time": "", "schedule": "인천 국제공항 집결 후 출국 수속"}},
+      {{"city": "", "transport": "TK021", "time": "23:35", "schedule": "인천 출발 / 이스탄불 향발"}}
     ],
     "meals": ["-", "-", "기내식"],
     "hotel": "HOTEL : 기내 숙박"
   }}
 ]
 """
+
                     response = client.models.generate_content(
                         model='gemini-3.5-flash-lite',
                         contents=system_prompt,
@@ -384,7 +409,7 @@ with col2:
                     ws.merge_cells("F3:G3")
                     
                     # 열 너비 설정
-                    col_widths = {1: 9.25, 2: 12.75, 3: 7.5, 4: 9.25, 5: 64.25, 6: 3.63, 7: 10.0}
+                    col_widths = {1: 9.25, 2: 12.75, 3: 11.0, 4: 9.25, 5: 64.25, 6: 3.63, 7: 10.0}
                     for c_idx, width in col_widths.items():
                         ws.column_dimensions[get_column_letter(c_idx)].width = width
                     
@@ -463,7 +488,7 @@ with col2:
                     wb.save(output)
                     output.seek(0)
                     
-                    render_assistant_ui("success", "선배님! 사내 표준 엑셀 DB와 완벽 동기화하여 제작 완료했습니다! 🙇‍♂️✨")
+                    render_assistant_ui("success", "선배님! 정밀 항공편명과 지역 명소를 빈틈없이 꽉 채워 제작 완료했습니다! 🙇‍♂️✨")
                     
                     final_title = tour_title.strip() if tour_title.strip() else "유럽투어"
                     file_name = f"{start_date.strftime('%Y-%m-%d')} {final_title} - 일정표.xlsx"
