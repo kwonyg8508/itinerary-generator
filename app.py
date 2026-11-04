@@ -284,7 +284,7 @@ with col2:
                     if "[옵션 A]" in input_mode:
                         system_prompt = f"""
 당신은 15년 차 유럽 전문 랜드사의 수석 오퍼레이터입니다.
-아래 제공된 [사내 표준 엑셀 DB]를 최우선 기준으로 삼아 요청받은 일정을 JSON 배열로 작성하세요.
+아래 제공된 [사내 표준 엑셀 DB]를 최우선 기준으로 삼아 요청받은 일정을 생성하세요.
 
 [사내 표준 엑셀 DB]
 {db_context if db_context else "(사내 DB 없음 - 표준 규격 준수)"}
@@ -295,24 +295,25 @@ with col2:
 [작성 규칙]
 1. 사내 DB 파일 중 가장 부합하는 템플릿의 전체 동선, 도시별 명소 문구(`▶ ~한 ...`), 식사, 호텔 규격을 그대로 적용하세요.
 2. 도시명(city)은 도시가 바뀔 때만 첫 행에 적고, 이어지는 일정은 빈칸("")으로 둡니다.
-3. 전일 육로 관광일의 2행에만 transport="전용차량", time="전  일"을 단 1회 표기합니다. (오전/오후/저녁 표기 절대 금지)
+3. 전일 육로 관광일의 2행에만 transport="전용차량", time="전  일"을 단 1회 표기합니다.
 4. 마지막 날 인천 도착 후에는 '자택 휴식' 등의 불필요한 행을 절대 생성하지 마세요.
-5. 출력 포맷은 반드시 지정된 JSON 규격만 출력하세요.
 """
                     else:
                         system_prompt = f"""
 당신은 15년 차 유럽 전문 랜드사의 수석 오퍼레이터입니다.
-사용자가 입력한 아래 루팅 정보를 바탕으로, 대형 여행사 제출용 최고급 상세 일정표를 JSON 배열로 작성하세요.
+사용자가 입력한 아래 루팅 정보를 바탕으로, 대형 여행사 제출용 최고급 상세 일정표를 생성하세요.
 사내 DB에 얽매이지 말고, 텍스트에 적힌 항공 편명/시간/경유 동선을 100% 보존하고 각 도시 명소를 풍성하게 확장하세요.
 
 [사용자 입력 루팅 원본]
 {routing_text}
 
 [핵심 작성 및 파싱 절대 규칙 - 위반 금지]
-1. 항공 스케줄(편명/시간/경유) 원본 100% 보존 및 매핑:
+1. 날짜(day) 단위 통합:
+   - 각 일자(제1일, 제2일...)는 반드시 하나의 객체로 만들고, 그 날의 모든 일정 행들을 'rows' 배열 안에 순서대로 넣으세요. 절대로 1개 일정을 여러 day로 쪼개지 마세요.
+2. 항공 스케줄(편명/시간/경유) 원본 100% 보존 및 매핑:
    - 텍스트에 명시된 항공 편명(예: TK021, TK1845, TK1844, TK2010, TK020)은 반드시 해당 항공 이동 행의 transport 칸에 기재하세요.
-   - 시간(time) 칸에는 사용자가 텍스트에 직접 기재한 '실제 시각(예: 20:45, 12:50, 07:35, 09:00, 17:05, 08:55)'만 정확히 적으세요.
-   - '오전', '오후', '저녁', '늦은 오후' 같은 모호한 단어는 time 칸에 절대 넣지 마세요 (무조건 빈칸("") 처리).
+   - 시간(time) 칸에는 사용자가 기재한 '실제 시각(예: 20:45, 12:50, 07:35, 09:00, 17:05, 08:55)'만 정확히 적으세요.
+   - '오전', '오후', '저녁', '늦은 오후' 같은 단어는 time 칸에 절대 넣지 마세요 (무조건 빈칸("") 처리).
    - 1일차 경유편의 경우:
      * 행1: city="인천", transport="", time="", schedule="인천 국제공항 집결 후 출국 수속"
      * 행2: city="", transport="TK021", time="", schedule="인천 출발 / 이스탄불 향발 (비행시간 약 11시간 30분)"
@@ -320,12 +321,10 @@ with col2:
      * 행4: city="", transport="TK1845", time="", schedule="이스탄불 출발 / 아테네 향발"
      * 행5: city="아테네", transport="", time="20:45", schedule="아테네 공항 도착 후 가이드 미팅"
      * 행6: city="", transport="", time="", schedule="호텔 투숙 및 휴식"
-
-2. 교통편('전용차량') 및 시간('전  일') 표기 엄격 제한:
+3. 교통편('전용차량') 및 시간('전  일') 표기 엄격 제한:
    - 전일 육로 관광일의 경우: 오직 그 날의 2번째 행(조식 후 첫 이동/관광 시작 행)에만 단 1회 transport="전용차량", time="전  일"을 적습니다.
-   - 같은 날 다른 행에 transport="전용차량"을 중복으로 적거나 time에 '오후', '저녁'을 적는 행위를 금지합니다 (무조건 빈칸("")).
-
-3. 도시별 지리적 정확성 및 명소 풍성도 (각 도시마다 최소 3~5개 명소 필수):
+   - 같은 날 다른 행에 transport="전용차량"을 중복으로 적거나 time에 '오후', '저녁'을 적는 행위를 금지합니다.
+4. 도시별 지리적 정확성 및 명소 풍성도 (각 도시마다 최소 3~5개 명소 필수):
    - 각 도시/지역마다 대표 유료/무료 명소를 ' ▶ ~한 [명소명](내부/외관/조망)' 형식으로 풍성하게 개별 행으로 작성하세요.
    - 타 도시의 명소를 엉뚱하게 섞지 마세요 (예: 아테네 일정에 이스탄불 성소피아를 넣는 행위 절대 금지!).
    - 그리스 명소 기준: 파르테논 신전(내부), 에레크테이온 신전, 아크로폴리스 언덕, 근대 올림픽 경기장(조망), 신타그마 광장, 플라카 지구 등.
@@ -333,19 +332,47 @@ with col2:
    - 이스탄불 명소 기준: 블루모스크(내부), 아야소피아(외관 또는 내부), 톱카프 궁전(외관), 보스포러스 해협 유람선, 히포드롬 광장, 그랜드 바자르 등.
    - 카파도키아 명소 기준: 괴레메 야외 박물관(내부), 데린쿠유 지하도시(내부), 우치히사르 요새(조망), 파샤바 계곡, 데브란트 계곡 등.
    - 파묵칼레/에페소/쉬린제 명소 기준: 파묵칼레 석회붕 및 히에라폴리스, 에페소 켈수스 도서관, 원형 대극장, 하드리아누스 신전, 쉬린제 마을 등.
-
-4. 마지막 날 인천 도착 규격:
-   - 마지막 날은 1개 행으로 작성: city="인천", transport="", time="08:55", schedule="인천 국제공항 도착 후 해산"
-   - 인천 도착 행 이후에 '자택 휴식', '귀가' 등의 추가 행을 절대 만들지 마세요. hotel은 빈칸("") 처리.
-
-[출력 포맷: 순수 JSON 배열만 출력]
+5. 마지막 날 인천 도착 규격:
+   - 마지막 날 rows는 1개 행만 작성: city="인천", transport="", time="08:55", schedule="인천 국제공항 도착 후 해산"
+   - hotel은 빈칸("") 처리.
 """
+
+                    # 엄격한 JSON 스키마 강제 정의 (구조 변형 원천 방지)
+                    json_schema = {
+                        "type": "ARRAY",
+                        "items": {
+                            "type": "OBJECT",
+                            "properties": {
+                                "day": {"type": "INTEGER"},
+                                "rows": {
+                                    "type": "ARRAY",
+                                    "items": {
+                                        "type": "OBJECT",
+                                        "properties": {
+                                            "city": {"type": "STRING"},
+                                            "transport": {"type": "STRING"},
+                                            "time": {"type": "STRING"},
+                                            "schedule": {"type": "STRING"}
+                                        },
+                                        "required": ["schedule"]
+                                    }
+                                },
+                                "meals": {
+                                    "type": "ARRAY",
+                                    "items": {"type": "STRING"}
+                                },
+                                "hotel": {"type": "STRING"}
+                            },
+                            "required": ["day", "rows"]
+                        }
+                    }
 
                     response = client.models.generate_content(
                         model='gemini-3.5-flash-lite',
                         contents=system_prompt,
                         config=types.GenerateContentConfig(
-                            response_mime_type="application/json"
+                            response_mime_type="application/json",
+                            response_schema=json_schema
                         )
                     )
                     
@@ -354,7 +381,29 @@ with col2:
                         raw_text = re.sub(r"^```(?:json)?\s*", "", raw_text, flags=re.MULTILINE)
                         raw_text = re.sub(r"\s*```$", "", raw_text, flags=re.MULTILINE)
                     
-                    parsed_days = json.loads(raw_text)
+                    parsed_raw = json.loads(raw_text)
+                    
+                    # Day 병합 보정 로직 (혹시라도 분리되어 반환된 day들을 안전하게 합침)
+                    day_dict = {}
+                    for item in parsed_raw:
+                        d_num = item.get("day", 1)
+                        if d_num not in day_dict:
+                            day_dict[d_num] = {
+                                "day": d_num,
+                                "rows": [],
+                                "meals": item.get("meals") or ["-", "-", "-"],
+                                "hotel": item.get("hotel") or ""
+                            }
+                        for r_item in item.get("rows", []):
+                            # 유효한 내용이 있는 행만 추가
+                            if r_item.get("schedule") or r_item.get("city") or r_item.get("transport"):
+                                day_dict[d_num]["rows"].append(r_item)
+                        if item.get("hotel"):
+                            day_dict[d_num]["hotel"] = item.get("hotel")
+                        if item.get("meals") and any(m != "-" for m in item.get("meals")):
+                            day_dict[d_num]["meals"] = item.get("meals")
+
+                    parsed_days = [day_dict[k] for k in sorted(day_dict.keys())]
                     
                     # 엑셀 워크북 생성
                     wb = openpyxl.Workbook()
@@ -419,15 +468,10 @@ with col2:
                         weekday_str = days_korean[curr_date.weekday()]
                         
                         rows_data = item.get("rows", [])
-                        if not isinstance(rows_data, list):
-                            rows_data = []
-                            
                         hotel_str = str(item.get("hotel") or "").strip()
-                        meals = item.get("meals", ["-", "-", "-"])
-                        if not isinstance(meals, list):
-                            meals = ["-", "-", "-"]
+                        meals = item.get("meals") or ["-", "-", "-"]
                         
-                        # 안전한 마지막 날 호텔 판별 (인덱스 에러 방지)
+                        # 마지막 날 인천 도착 시 호텔칸 제외
                         is_last_day = (item_idx == total_days_count - 1)
                         first_row_text = str(rows_data[0].get("schedule", "")) if len(rows_data) > 0 else ""
                         is_incheon_arrival = "인천" in first_row_text and "도착" in first_row_text
@@ -463,15 +507,15 @@ with col2:
                         for idx, r_data in enumerate(rows_data):
                             r = cur_row + idx
                             if r_data.get("city"):
-                                cell_city = ws.cell(r, 2, r_data.get("city"))
+                                cell_city = ws.cell(r, 2, str(r_data.get("city") or ""))
                                 cell_city.alignment = align_center
                             if r_data.get("transport"):
-                                cell_tr = ws.cell(r, 3, r_data.get("transport"))
+                                cell_tr = ws.cell(r, 3, str(r_data.get("transport") or ""))
                                 cell_tr.alignment = align_center
                             if r_data.get("time"):
-                                cell_tm = ws.cell(r, 4, r_data.get("time"))
+                                cell_tm = ws.cell(r, 4, str(r_data.get("time") or ""))
                                 cell_tm.alignment = align_center
-                            cell_sc = ws.cell(r, 5, r_data.get("schedule", ""))
+                            cell_sc = ws.cell(r, 5, str(r_data.get("schedule") or ""))
                             cell_sc.alignment = align_mid_left
                         
                         # 호텔
@@ -481,12 +525,12 @@ with col2:
                             h_cell.font = font_bold
                             h_cell.alignment = align_mid_left
                         
-                        # 식사 (안전하게 인덱싱)
+                        # 식사
                         meal_labels = ["조", "중", "석"]
                         for m_idx in range(3):
                             ws.cell(cur_row + m_idx, 6, meal_labels[m_idx]).alignment = align_center
                             meal_val = meals[m_idx] if m_idx < len(meals) else "-"
-                            ws.cell(cur_row + m_idx, 7, meal_val).alignment = align_center
+                            ws.cell(cur_row + m_idx, 7, str(meal_val)).alignment = align_center
                         
                         cur_row += total_rows
                     
@@ -502,7 +546,7 @@ with col2:
                     wb.save(output)
                     output.seek(0)
                     
-                    render_assistant_ui("success", "선배님! 불필요한 단어 싹 쳐내고 정확한 항공시간과 하단 안내문까지 완벽 반영했습니다! 🙇‍♂️✨")
+                    render_assistant_ui("success", "선배님! JSON 스키마를 고정하여 날짜 쪼개짐과 빈칸 버그를 완벽히 해결했습니다! 🙇‍♂️✨")
                     
                     final_title = tour_title.strip() if tour_title.strip() else "유럽투어"
                     file_name = f"{start_date.strftime('%Y-%m-%d')} {final_title} - 일정표.xlsx"
