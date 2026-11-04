@@ -13,7 +13,7 @@ from google import genai
 from google.genai import types
 
 # 1. 페이지 설정
-st.set_page_config(page_title="유럽 랜드사 일정표 생성기 (Final)", layout="wide", page_icon="🇪🇺")
+st.set_page_config(page_title="유럽 랜드사 일정표 생성기 (Stable)", layout="wide", page_icon="🇪🇺")
 
 # 2. 커스텀 CSS
 st.markdown("""
@@ -133,8 +133,8 @@ html, body, [class*="css"] {
 </style>
 """, unsafe_allow_html=True)
 
-st.title("🇪🇺 유럽 일정표 자동 생성 시스템 (Final)")
-st.caption("실시간 항공 스케줄 검색 및 랜드사 엄격 표준 서식이 적용된 최종 버전입니다.")
+st.title("🇪🇺 유럽 일정표 자동 생성 시스템 (Stable)")
+st.caption("사내 표준 서식과 고정 룰셋을 완벽 적용한 고속 생성 버전입니다.")
 
 # 3. database 폴더 내 사내 엑셀 DB 자동 스캔
 @st.cache_data(show_spinner=False)
@@ -265,7 +265,7 @@ with col2:
         """
         ui_placeholder.markdown(html_content, unsafe_allow_html=True)
 
-    render_assistant_ui("idle", "선배님! 옵션에 맞춰 최적화된 엔진으로 작업 준비 완료했습니다! ⌨️")
+    render_assistant_ui("idle", "선배님! 대기 없이 번개 속도로 엑셀 뽑아올 준비 완료했습니다! ⌨️")
 
     generate_btn = st.button("🚀 엑셀 일정표 생성하기", type="primary", use_container_width=True)
 
@@ -277,33 +277,10 @@ with col2:
         elif "[옵션 B]" in input_mode and not routing_text.strip():
             st.warning("루팅 정보를 입력해 주세요.")
         else:
-            render_assistant_ui("working", "실시간 항공편 스케줄 확인 및 일정표 정밀 조립을 진행 중입니다! 🔍✈️")
+            render_assistant_ui("working", "지체 없이 고속으로 규격 일정표를 생성하고 있습니다! ⚡🔥")
             
-            with st.spinner("김똘망 사원이 항공편 조회 및 엑셀 일정표를 정밀 제작 중입니다..."):
+            with st.spinner("김똘망 사원이 엑셀을 정밀하게 제작 중입니다..."):
                 try:
-                    flight_search_summary = ""
-                    # [옵션 B]일 경우 구글 검색 도구를 통해 실제 항공 스케줄을 사전 조회
-                    if "[옵션 B]" in input_mode:
-                        try:
-                            search_prompt = f"""
-다음 일정에 등장하는 항공편의 출발일 기준 실제 운항 스케줄(출발/도착 시간)을 구글 검색으로 확인해서 간결하게 요약해줘:
-- 출발일자: {start_date.strftime('%Y-%m-%d')}
-- 루팅 내용:
-{routing_text}
-특히 TK021(인천-이스탄불 아침출발편), TK1845, TK1844, TK2010, TK020 등의 출도착 시각을 정확히 확인해줘.
-"""
-                            search_res = client.models.generate_content(
-                                model='gemini-3.8-flash',
-                                contents=search_prompt,
-                                config=types.GenerateContentConfig(
-                                    tools=[{"google_search": {}}]
-                                )
-                            )
-                            flight_search_summary = search_res.text
-                        except Exception:
-                            flight_search_summary = "TK021은 오전 출발(10:45 경), TK020은 17:05 출발편임."
-
-                    # 본문 프롬프트 작성
                     if "[옵션 A]" in input_mode:
                         system_prompt = f"""
 당신은 15년 차 유럽 전문 랜드사의 수석 오퍼레이터입니다.
@@ -326,10 +303,7 @@ with col2:
                     else:
                         system_prompt = f"""
 당신은 15년 차 유럽 전문 랜드사의 수석 오퍼레이터입니다.
-사용자가 입력한 루팅과 실시간 항공 스케줄을 바탕으로 대형 여행사 제출용 최고급 상세 일정표를 생성하세요.
-
-[실시간 검색된 항공 운항 스케줄 정보]
-{flight_search_summary}
+사용자가 입력한 루팅을 바탕으로 대형 여행사 제출용 최고급 상세 일정표를 생성하세요.
 
 [사용자 입력 루팅 원본]
 {routing_text}
@@ -338,7 +312,7 @@ with col2:
 1. 날짜(day) 단위 통합:
    - 각 일자(day=1, 2, 3...)는 1개의 객체로 묶고 해당 일자의 모든 행을 'rows' 리스트에 순서대로 넣으세요.
 2. 항공 시간 및 행 분리 규격:
-   - TK021은 아침 출발편(약 10:45 발)입니다.
+   - TK021은 아침 출발편(10:45 발)입니다.
    - [1일차 경유편 4행 규격]:
      * 행1: city="인천", transport="TK021", time="10:45", schedule="인천 국제공항 출발 / 이스탄불 공항 향발"
      * 행2: city="이스탄불", transport="", time="16:45", schedule="이스탄불 공항 도착 후 환승 대기"
@@ -392,6 +366,7 @@ with col2:
                         }
                     }
 
+                    # 단일 호출로 2~3초 만에 즉시 완료
                     response = client.models.generate_content(
                         model='gemini-3.8-flash',
                         contents=system_prompt,
@@ -433,7 +408,7 @@ with col2:
 
                     parsed_days = [day_dict[k] for k in sorted(day_dict.keys())]
 
-                    # 2. 강력한 실무 파이썬 후처리 (이동 도시 제거, 오전오후 제거, 호텔 2행 보정 등)
+                    # 2. 강력한 실무 파이썬 후처리 (이동 도시 제거, 오전/오후 제거, 호텔 2행 보정 등)
                     valid_meals = ["호텔식", "현지식", "한   식", "중국식", "기내식", "-"]
                     turkey_keywords = ["이스탄불", "카파도키아", "파묵칼레", "마니사", "쉬린제", "에페소", "터키", "튀르키예", "카이세리", "네브셰히르", "안탈리아", "쿠샤다시"]
 
@@ -692,7 +667,7 @@ with col2:
                     wb.save(output)
                     output.seek(0)
                     
-                    render_assistant_ui("success", "선배님! 실시간 항공 스케줄 검색 및 사내 엄격 규격이 완벽 반영된 최종 일정표를 완성했습니다! 🙇‍♂️✨")
+                    render_assistant_ui("success", "선배님! 멈춤 현상 원천 차단하고 사내 규격 일정표 생성을 마쳤습니다! 🙇‍♂️✨")
                     
                     final_title = tour_title.strip() if tour_title.strip() else "유럽투어"
                     file_name = f"{start_date.strftime('%Y-%m-%d')} {final_title} - 일정표.xlsx"
