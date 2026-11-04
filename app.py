@@ -137,7 +137,7 @@ html, body, [class*="css"] {
 """, unsafe_allow_html=True)
 
 st.title("🇪🇺 유럽 일정표 자동 생성 시스템 (Master Edition)")
-st.caption("실무 완판 규격: 관광지 설명은 일반체, 핵심 명소명만 정밀 볼드 서식 적용 완료")
+st.caption("실무 완판 규격: 아시아나 DB ➔ 대한항공 자동 전환, 관광지 설명 일반체/명소명 볼드 분리, 기내 숙박 및 도착 도시 자동 연동")
 
 # 3. database 폴더 내 사내 엑셀 DB 자동 스캔
 @st.cache_data(show_spinner=False)
@@ -202,12 +202,12 @@ with col1:
             st.info("💡 `database/` 폴더에 사내 엑셀이 있을 경우 자동 매핑됩니다.")
 
     start_date = st.date_input("출발일자 선택", datetime.today())
-    tour_title = st.text_input("행사명 (선택)", placeholder="예: 2026-12-05 그리스, 튀르키예 9일 TK")
+    tour_title = st.text_input("행사명 (선택)", placeholder="예: 2026-12-05 동유럽 9일 KE")
     
     if "[옵션 A]" in input_mode:
         quick_prompt = st.text_input(
             "간단 요청 입력",
-            placeholder="예: 그리스, 튀르키예 9일 TK / 동유럽 9일"
+            placeholder="예: 동유럽 9일 KE 프라하인 비엔나아웃 / 튀르키예 9일 중간항공 1회"
         )
     else:
         routing_text = st.text_area(
@@ -268,7 +268,7 @@ with col2:
         """
         ui_placeholder.markdown(html_content, unsafe_allow_html=True)
 
-    render_assistant_ui("idle", "선배님! 핵심 명소만 쏙 골라 볼드 처리할 준비 완료했습니다! ⌨️")
+    render_assistant_ui("idle", "선배님! 대한항공/아시아나 통합 룰 및 완판본 서식으로 준비 완료했습니다! ⌨️")
 
     generate_btn = st.button("🚀 엑셀 일정표 생성하기", type="primary", use_container_width=True)
 
@@ -280,47 +280,49 @@ with col2:
         elif "[옵션 B]" in input_mode and not routing_text.strip():
             st.warning("루팅 정보를 입력해 주세요.")
         else:
-            render_assistant_ui("working", "명소 부분 볼드체 렌더링 및 규격 조립 중입니다! 🏛️⚡🔥")
+            render_assistant_ui("working", "사내 DB 매칭 및 통합 항공 스케줄/완판본 서식을 조립 중입니다! ⚡🔥")
             
-            with st.spinner("김똘망 사원이 완판본 규격대로 오차 없이 조립하고 있습니다..."):
+            with st.spinner("김똘망 사원이 완판본 규격대로 꼼꼼히 제작하고 있습니다..."):
                 try:
                     system_prompt = f"""
 당신은 15년 차 유럽 전문 랜드사의 수석 오퍼레이터입니다.
-사용자가 입력한 루팅 정보를 바탕으로 최고급 상세 일정표 JSON을 생성하세요.
+아래 제공된 [사내 표준 엑셀 DB] 및 사용자의 입력을 바탕으로 고객 전달용 완벽한 엑셀 일정표 JSON을 생성하세요.
 
-[사용자 입력 루팅 원본]
+[사내 표준 엑셀 DB]
+{db_context if db_context else "(표준 랜드사 규격 준수)"}
+
+[사용자 입력 요청]
 {quick_prompt if "[옵션 A]" in input_mode else routing_text}
 
 [핵심 절대 규칙 - 위반 절대 금지]
-1. 항공 루팅 및 시간 규격:
-   - 본 행사는 터키항공(TK) 기준입니다. 절대로 대한항공을 넣지 마세요!
-   - [1일차 경유 4행 규격]:
+1. 항공 루팅 및 대한항공/아시아나 통합 규칙:
+   - 사용자가 대한항공(KE) 또는 국적기를 요청한 경우:
+     * 참조하는 사내 DB 파일이 아시아나(OZ) 베이스이거나 구형 스케줄이더라도, 항공편명(KE)과 시간표를 현재 대한항공 운항 스케줄 기준으로 보정하여 출력하세요.
+     * 아시아나 편명(OZ)은 결과표에 절대 표기하지 마세요.
+   - 터키항공(TK) 요청 시 경유 4행 규격 준수:
      * 행1: city="인  천", transport="TK021", time="10:45", schedule="인천 국제공항 출발 / 이스탄불 공항 향발"
      * 행2: city="이스탄불", transport="", time="16:45", schedule="이스탄불 공항 도착 후 환승 대기"
      * 행3: city="", transport="TK1845", time="19:15", schedule="이스탄불 공항 출발 / 아테네 공항 향발"
      * 행4: city="아테네", transport="", time="20:45", schedule="아테네 공항 도착 후 가이드 미팅"
-   - [3일차 아테네/이스탄불]: TK1844 (10:55-12:50) 아테네 공항 출발 / 이스탄불 공항 도착 후 가이드 미팅 (※ 12:50 도착이므로 중식은 기내식 처리!)
-   - [4일차 국내선]: TK2010 (07:35-09:00 또는 09:15-10:45)
-   - [8일차 귀국편]: TK020 (17:05 발) 이스탄불 공항 출발 / 인천 향발 -> 다음 행 schedule="기내 숙박", hotel="HOTEL : 기내 숙박"
-   - [9일차 도착편]: city="인  천", transport="", time="08:55", schedule="인천 국제공항 도착 후 해산", hotel=""
+   - 귀국편(마지막 전날): 공항 이동 후 항공편 출발 행 작성, 그 다음 행에 schedule="기내 숙박", hotel="HOTEL : 기내 숙박".
+   - 마지막 날(인천 도착일): city="인  천", schedule="인천 국제공항 도착 후 해산", hotel="".
 
 2. 일정 흐름 및 세모표(▶) 직행 규칙:
    - '~로 이동' 행 바로 다음에 쓸데없이 '[도시명] 관광' 같은 빈 껍데기 행을 절대 넣지 마세요!
    - 이동 행 바로 다음 행부터 곧바로 ' ▶ [설명] **[핵심명소]**' 형태로 작성하세요.
 
-3. ★명소 서식 표기 핵심 규칙 (부분 볼드 처리):
+3. 관광 명소 서식 표기 규칙 (부분 볼드 처리):
    - 설명 부분은 보통체로, 맨 뒤의 핵심 관광지 명칭만 **기호로 감싸세요!
    - 대괄호([])는 절대로 사용하지 마세요.
    (작성 예시):
    - schedule=" ▶ 세계 3대 운하 중 하나인 **고린도 운하**"
-   - schedule=" ▶ 아폴론 신전과 고대 유적지가 보존된 **고린도 유적지**"
-   - schedule=" ▶ 서양 문명의 정수이자 유네스코 세계문화유산인 **파르테논 신전**"
    - schedule=" ▶ 수천 년 전 화산재가 굳어져 형성된 기암괴석의 전시장 **괴레메 야외 박물관**"
+   - schedule=" ▶ 서양 문명의 정수이자 유네스코 세계문화유산인 **파르테논 신전**"
 
 4. 도시명(city) 배치 원칙:
    - 일자 첫 행에 시작 도시를 적습니다.
    - 이동 중인 행(schedule="~로 이동")에는 city를 빈칸("")으로 둡니다.
-   - 이동 후 도착하여 첫 번째 명소(▶)가 시작되는 행의 city 칸에 도착 도시명을 1회만 정확히 기재하세요. (도시가 연속으로 중복되어 겹치지 않게 하세요!)
+   - 이동 후 도착하여 첫 번째 명소(▶)가 시작되는 행의 city 칸에 도착 도시명을 1회만 기재하세요. (중복 방지)
 
 5. 하루 시작과 마무리:
    - 2일차부터 아침 1행은 무조건 schedule="호텔 조식 후" 단독 작성.
@@ -328,8 +330,8 @@ with col2:
 
 6. 식사 및 호텔:
    - 식사는 "호텔식", "현지식", "한   식", "중국식", "기내식", "-" 중에서만 기재.
-   - 호텔: 튀르키예 지역은 "HOTEL : ANY 5* HOTEL CLASS", 그리스 지역은 "HOTEL : ANY 4* HOTEL CLASS".
-   - 8일차는 "HOTEL : 기내 숙박", 9일차는 "" (빈칸).
+   - 호텔: 튀르키예 지역은 "HOTEL : ANY 5* HOTEL CLASS", 그 외 유럽 지역은 "HOTEL : ANY 4* HOTEL CLASS".
+   - 귀국 출발일은 "HOTEL : 기내 숙박", 마지막 날은 "" (빈칸).
 """
 
                     json_schema = {
@@ -445,8 +447,9 @@ with col2:
                                 rows[0]["schedule"] = "호텔 조식 후"
                                 rows.insert(1, {"city": "", "transport": "", "time": "", "schedule": remainder})
 
-                        # (3) 1일차 터키항공(TK) 경유 4단 규격 강제 보정
-                        if d_num == 1:
+                        # (3) 1일차 터키항공(TK) 경유 4단 규격 강제 보정 (사용자 요청이 TK인 경우)
+                        req_text = (quick_prompt if "[옵션 A]" in input_mode else routing_text).upper()
+                        if d_num == 1 and ("TK" in req_text or "터키항공" in req_text):
                             rows = [
                                 {"city": "인  천", "transport": "TK021", "time": "10:45", "schedule": "인천 국제공항 출발 / 이스탄불 공항 향발"},
                                 {"city": "이스탄불", "transport": "", "time": "16:45", "schedule": "이스탄불 공항 도착 후 환승 대기"},
@@ -514,19 +517,15 @@ with col2:
                             cleaned_meals.append("-")
                         item["meals"] = cleaned_meals[:3]
 
-                        # (7) 귀국일(8일차) 및 마지막 날(9일차) 고정
+                        # (7) 귀국일(마지막 전날) 및 마지막 날 고정
                         if d_num == total_days_cnt - 1:
                             item["rows"] = [r for r in rows if "인천 도착" not in r.get("schedule", "")]
-                            has_tk020 = any("TK020" in r.get("transport", "") or "TK 020" in r.get("transport", "") for r in item["rows"])
-                            if not has_tk020:
-                                item["rows"].append({"city": "", "transport": "TK020", "time": "17:05", "schedule": "이스탄불 공항 출발 / 인천 향발"})
-                            
                             has_night_flight = any("기내 숙박" in r.get("schedule", "") for r in item["rows"])
                             if not has_night_flight:
                                 item["rows"].append({"city": "인  천", "transport": "", "time": "", "schedule": "기내 숙박"})
-                            
                             item["hotel"] = "HOTEL : 기내 숙박"
-                            item["meals"] = ["호텔식", "현지식", "기내식"]
+                            if len(item["meals"]) == 3:
+                                item["meals"][2] = "기내식"
 
                         elif d_num == total_days_cnt:
                             item["rows"] = [
@@ -667,7 +666,7 @@ with col2:
                             cell_sc = ws.cell(r, 5)
                             cell_sc.alignment = align_mid_left
                             
-                            # ★ 핵심: 관광 명소 앞부분은 일반체, 뒤의 명소명만 볼드체 렌더링
+                            # 관광 명소 앞부분 일반체, 뒤의 명소명만 볼드체 렌더링
                             if sc_text.strip().startswith("▶"):
                                 bold_match = re.search(r"^(.*?)\*\*(.+?)\*\*(.*)$", sc_text)
                                 if bold_match:
@@ -685,7 +684,6 @@ with col2:
                                     
                                     cell_sc.value = CellRichText(rich_text_elements)
                                 else:
-                                    # ** 마크다운이 안 붙었을 경우: 마지막 단어(명소명)만 분리하여 볼드 적용
                                     parts = sc_text.rsplit(" ", 1)
                                     if len(parts) == 2:
                                         cell_sc.value = CellRichText([
@@ -727,7 +725,7 @@ with col2:
                     wb.save(output)
                     output.seek(0)
                     
-                    render_assistant_ui("success", "선배님! 설명은 보통 글씨로, 최종 관광지명만 굵은 글씨로 정밀 분리 렌더링했습니다! 🙇‍♂️✨")
+                    render_assistant_ui("success", "선배님! 요청하신 통합 항공 스케줄과 완판본 서식으로 엑셀 제작을 완료했습니다! 🙇‍♂️✨")
                     
                     final_title = tour_title.strip() if tour_title.strip() else "유럽투어"
                     file_name = f"{start_date.strftime('%Y-%m-%d')} {final_title} - 일정표.xlsx"
