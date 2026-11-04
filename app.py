@@ -14,7 +14,7 @@ from google import genai
 from google.genai import types
 
 # 1. 페이지 설정
-st.set_page_config(page_title="유럽 랜드사 일정표 생성기 (Stable)", layout="wide", page_icon="🇪🇺")
+st.set_page_config(page_title="유럽 랜드사 일정표 생성기 (Final)", layout="wide", page_icon="🇪🇺")
 
 # 2. 커스텀 CSS
 st.markdown("""
@@ -134,8 +134,8 @@ html, body, [class*="css"] {
 </style>
 """, unsafe_allow_html=True)
 
-st.title("🇪🇺 유럽 일정표 자동 생성 시스템 (Stable)")
-st.caption("서버 과부하 자동 우회 및 사내 랜드사 규격 서식을 완벽 적용합니다.")
+st.title("🇪🇺 유럽 일정표 자동 생성 시스템 (Final)")
+st.caption("사내 표준 엑셀 규격과 정밀 명소 확장이 완벽하게 통합된 최종 버전입니다.")
 
 # 3. database 폴더 내 사내 엑셀 DB 자동 스캔
 @st.cache_data(show_spinner=False)
@@ -266,7 +266,7 @@ with col2:
         """
         ui_placeholder.markdown(html_content, unsafe_allow_html=True)
 
-    render_assistant_ui("idle", "선배님! 옵션에 맞춰 최적화된 엔진으로 작업 준비 완료했습니다! ⌨️")
+    render_assistant_ui("idle", "선배님! 관광 명소를 꽉 채워 납품할 준비 완료했습니다! ⌨️")
 
     generate_btn = st.button("🚀 엑셀 일정표 생성하기", type="primary", use_container_width=True)
 
@@ -278,7 +278,7 @@ with col2:
         elif "[옵션 B]" in input_mode and not routing_text.strip():
             st.warning("루팅 정보를 입력해 주세요.")
         else:
-            render_assistant_ui("working", "서버 과부하를 우회하며 고속으로 사내 규격 엑셀을 조립 중입니다! ⚡🔥")
+            render_assistant_ui("working", "풍성한 명소와 정확한 항공 스케줄을 매핑 중입니다! 🏛️✈️🔥")
             
             with st.spinner("김똘망 사원이 엑셀을 정밀하게 제작 중입니다..."):
                 try:
@@ -313,7 +313,7 @@ with col2:
 1. 날짜(day) 단위 통합:
    - 각 일자(day=1, 2, 3...)는 1개의 객체로 묶고 해당 일자의 모든 행을 'rows' 리스트에 순서대로 넣으세요.
 2. 항공 시간 및 행 분리 규격:
-   - TK021은 아침 출발편(10:45 발)입니다.
+   - TK021은 오전 출발편(10:45 발)입니다.
    - [1일차 경유편 4행 규격]:
      * 행1: city="인천", transport="TK021", time="10:45", schedule="인천 국제공항 출발 / 이스탄불 공항 향발"
      * 행2: city="이스탄불", transport="", time="16:45", schedule="이스탄불 공항 도착 후 환승 대기"
@@ -322,9 +322,16 @@ with col2:
    - [일반 항공 이동 2행 규격]:
      * 출발 행: transport="항공편명", time="출발시간", schedule="~공항 출발 / ~공항 향발"
      * 도착 행: transport="", time="도착시간", schedule="~공항 도착 후 가이드 미팅"
-3. 일정 시작과 마무리 원칙:
+3. 일정 시작, 풍성한 명소 기재, 마무리 원칙 (★필수):
    - 2일차부터 아침 첫 행: schedule="호텔 조식 후" 단독 기재.
-   - 육로 관광일 2행: transport="전용차량", time="전  일", schedule="[해당도시] 관광" (미사여구 없이 간결하게)
+   - 육로 관광일 2행: transport="전용차량", time="전  일", schedule="[해당도시] 관광"
+   - ★매우 중요: '[해당도시] 관광' 행 바로 아래에 반드시 대표 명소를 최소 3~4개 이상 ' ▶ ~한 명소명(내부/외관/조망)' 형태로 개별 행으로 빼곡하게 작성하세요! 절대로 도시 관광 한 줄로 끝내지 마세요!
+     (작성 예시):
+     행: schedule="아테네 관광"
+     행: schedule=" ▶ 서양 문명의 정수 아크로폴리스 언덕 및 파르테논 신전(내부) 관람"
+     행: schedule=" ▶ 승리의 여신 에레크테이온 신전 및 카리아티드 여사제 석주 조망"
+     행: schedule=" ▶ 제1회 근대 올림픽 경기장(파나티나이코) 조망"
+     행: schedule=" ▶ 아테네 시민들의 활기찬 플라카 지구 자유 산책"
    - 관광 투어가 끝나는 날의 마지막 2개 행:
      * 행 N-1: schedule="호텔로 이동"
      * 행 N: schedule="호텔 투숙 및 휴식"
@@ -332,10 +339,10 @@ with col2:
    - '이동' 행에는 city를 빈칸("")으로 비워두세요.
    - time 칸에 '오전', '오후', '주간', '야간' 절대 금지! (오직 '전  일' 또는 실제 시간 HH:MM만 허용)
    - 관광지 세부 시간(09:30 등) 기재 금지.
-5. 대괄호([]) 절대 금지: ' ▶ ~한 명소명' 형태로 개별 행 작성.
+5. 대괄호([]) 절대 금지.
 6. 식사 및 호텔:
    - 식사는 "호텔식", "현지식", "한   식", "중국식", "기내식", "-" 중에서만 기재.
-   - 호텔: 튀르키예 지역은 "ANY 5* HOTEL 또는 동급", 그리스/기타 지역은 "ANY 4* HOTEL 또는 동급", 1일차 기내박은 "HOTEL : 기내 숙박", 마지막 날은 빈칸.
+   - 호텔: 튀르키예 지역은 "ANY 5* HOTEL 또는 동급", 그리스/기타 지역은 "ANY 4* HOTEL 또는 동급", 1일차는 "HOTEL : 기내 숙박", 마지막 날은 빈칸.
 """
 
                     json_schema = {
@@ -367,8 +374,8 @@ with col2:
                         }
                     }
 
-                    # 트래픽 분산 및 503 자동 복구 풀 (Pro 모델 및 라이트 모델 우선 배치)
-                    candidate_models = ['gemini-2.5-pro', 'gemini-3.5-flash-lite', 'gemini-3.8-flash']
+                    # 안정적인 상용 모델 순환 폴백 (Pro 및 플래시 라이트)
+                    candidate_models = ['gemini-2.5-pro', 'gemini-3.5-flash-lite']
                     response = None
                     last_error = None
 
@@ -386,11 +393,11 @@ with col2:
                                 break
                         except Exception as e:
                             last_error = e
-                            time.sleep(1.2) # 서버 부하 회피 대기
+                            time.sleep(1.2)
                             continue
 
                     if not response or not response.text:
-                        raise Exception(f"일시적인 서버 과부하가 지속되고 있습니다. 잠시 후 다시 시도해 주세요: {last_error}")
+                        raise Exception(f"일시적인 AI 서버 지연이 발생했습니다: {last_error}")
 
                     raw_text = response.text.strip()
                     if "```" in raw_text:
@@ -413,8 +420,6 @@ with col2:
                         for r_item in item.get("rows", []):
                             if r_item.get("schedule") or r_item.get("city") or r_item.get("transport"):
                                 sc_clean = str(r_item.get("schedule") or "").replace("[", "").replace("]", "").strip()
-                                if "시내로 이동하여" in sc_clean:
-                                    sc_clean = re.sub(r"시내로\s*이동하여\s*(?:본격적인\s*)?관광\s*시작", "관광", sc_clean).strip()
                                 r_item["schedule"] = sc_clean
                                 day_dict[d_num]["rows"].append(r_item)
                         if item.get("hotel"):
@@ -424,7 +429,7 @@ with col2:
 
                     parsed_days = [day_dict[k] for k in sorted(day_dict.keys())]
 
-                    # 2. 강력한 실무 파이썬 후처리 (규격 강제화)
+                    # 2. 강력한 실무 파이썬 후처리
                     valid_meals = ["호텔식", "현지식", "한   식", "중국식", "기내식", "-"]
                     turkey_keywords = ["이스탄불", "카파도키아", "파묵칼레", "마니사", "쉬린제", "에페소", "터키", "튀르키예", "카이세리", "네브셰히르", "안탈리아", "쿠샤다시"]
 
@@ -523,15 +528,14 @@ with col2:
                             cleaned_meals.append("-")
                         item["meals"] = cleaned_meals[:3]
 
-                        # (7) 호텔 표기 강제 분기
-                        all_text = " ".join([r.get("schedule", "") + " " + str(r.get("city", "")) for r in rows])
-                        is_turkey = any(tk in all_text for tk in turkey_keywords)
-
-                        if d_num == 1 and ("기내" in item.get("hotel", "") or "기내" in item["meals"][2]):
+                        # (7) 호텔 표기 강제 분기 (1일차 기내박 확실히 보존)
+                        if d_num == 1:
                             item["hotel"] = "HOTEL : 기내 숙박"
-                        elif is_final_day or ("인천" in all_text and "도착 후 해산" in all_text):
+                        elif is_final_day:
                             item["hotel"] = ""
                         else:
+                            all_text = " ".join([r.get("schedule", "") + " " + str(r.get("city", "")) for r in rows])
+                            is_turkey = any(tk in all_text for tk in turkey_keywords)
                             if is_turkey:
                                 item["hotel"] = "HOTEL : ANY 5* HOTEL 또는 동급"
                             else:
@@ -683,7 +687,7 @@ with col2:
                     wb.save(output)
                     output.seek(0)
                     
-                    render_assistant_ui("success", "선배님! 트래픽 과부하를 우회하고 엑셀 생성을 성공적으로 완료했습니다! 🙇‍♂️✨")
+                    render_assistant_ui("success", "선배님! 관광 명소를 풍성하게 꽉 채워 사내 표준 엑셀 제작을 완료했습니다! 🙇‍♂️✨")
                     
                     final_title = tour_title.strip() if tour_title.strip() else "유럽투어"
                     file_name = f"{start_date.strftime('%Y-%m-%d')} {final_title} - 일정표.xlsx"
