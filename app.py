@@ -9,6 +9,7 @@ import os
 import re
 import glob
 import base64
+import time
 from google import genai
 from google.genai import types
 
@@ -134,7 +135,7 @@ html, body, [class*="css"] {
 """, unsafe_allow_html=True)
 
 st.title("🇪🇺 유럽 일정표 자동 생성 시스템 (Stable)")
-st.caption("최신 Gemini 표준 모델 및 사내 랜드사 규격 서식을 적용합니다.")
+st.caption("서버 과부하 자동 우회 및 사내 랜드사 규격 서식을 완벽 적용합니다.")
 
 # 3. database 폴더 내 사내 엑셀 DB 자동 스캔
 @st.cache_data(show_spinner=False)
@@ -277,7 +278,7 @@ with col2:
         elif "[옵션 B]" in input_mode and not routing_text.strip():
             st.warning("루팅 정보를 입력해 주세요.")
         else:
-            render_assistant_ui("working", "최신 모델로 사내 규격 엑셀을 조립 중입니다! ⚡🔥")
+            render_assistant_ui("working", "서버 과부하를 우회하며 고속으로 사내 규격 엑셀을 조립 중입니다! ⚡🔥")
             
             with st.spinner("김똘망 사원이 엑셀을 정밀하게 제작 중입니다..."):
                 try:
@@ -366,8 +367,8 @@ with col2:
                         }
                     }
 
-                    # 최신 상용 지원 모델로 고정 (404 방지)
-                    candidate_models = ['gemini-3.8-flash', 'gemini-3.5-flash']
+                    # 트래픽 분산 및 503 자동 복구 풀 (Pro 모델 및 라이트 모델 우선 배치)
+                    candidate_models = ['gemini-2.5-pro', 'gemini-3.5-flash-lite', 'gemini-3.8-flash']
                     response = None
                     last_error = None
 
@@ -385,10 +386,11 @@ with col2:
                                 break
                         except Exception as e:
                             last_error = e
+                            time.sleep(1.2) # 서버 부하 회피 대기
                             continue
 
                     if not response or not response.text:
-                        raise Exception(f"AI 모델 응답 생성 실패: {last_error}")
+                        raise Exception(f"일시적인 서버 과부하가 지속되고 있습니다. 잠시 후 다시 시도해 주세요: {last_error}")
 
                     raw_text = response.text.strip()
                     if "```" in raw_text:
@@ -422,7 +424,7 @@ with col2:
 
                     parsed_days = [day_dict[k] for k in sorted(day_dict.keys())]
 
-                    # 2. 실무 파이썬 후처리 (규격 강제화)
+                    # 2. 강력한 실무 파이썬 후처리 (규격 강제화)
                     valid_meals = ["호텔식", "현지식", "한   식", "중국식", "기내식", "-"]
                     turkey_keywords = ["이스탄불", "카파도키아", "파묵칼레", "마니사", "쉬린제", "에페소", "터키", "튀르키예", "카이세리", "네브셰히르", "안탈리아", "쿠샤다시"]
 
@@ -681,7 +683,7 @@ with col2:
                     wb.save(output)
                     output.seek(0)
                     
-                    render_assistant_ui("success", "선배님! 404 모델 에러를 수정하여 엑셀 생성을 성공적으로 완료했습니다! 🙇‍♂️✨")
+                    render_assistant_ui("success", "선배님! 트래픽 과부하를 우회하고 엑셀 생성을 성공적으로 완료했습니다! 🙇‍♂️✨")
                     
                     final_title = tour_title.strip() if tour_title.strip() else "유럽투어"
                     file_name = f"{start_date.strftime('%Y-%m-%d')} {final_title} - 일정표.xlsx"
