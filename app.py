@@ -26,7 +26,7 @@ if "generated_filename" not in st.session_state:
 if "ui_status" not in st.session_state:
     st.session_state.ui_status = "idle"
 if "ui_msg" not in st.session_state:
-    st.session_state.ui_msg = "선배님! 최신 초고속 엔진 세팅 완료되었습니다. 요청해 주세요! ☕"
+    st.session_state.ui_msg = "선배님! 정밀도 최우선 엔진 세팅 완료되었습니다. 요청해 주세요! ☕"
 
 # 3. 커스텀 CSS
 st.markdown("""
@@ -147,7 +147,7 @@ html, body, [class*="css"] {
 """, unsafe_allow_html=True)
 
 st.title("🇪🇺 유럽 일정표 자동 생성 시스템 (Master Edition)")
-st.caption("실무 완판 규격: 최신 Flash 모델 적용, 세션 락업 방지, 명소 부분 볼드 서식 탑재")
+st.caption("실무 완판 규격: 정밀도 최우선 프로 엔진 탑재, 아시아나/대한항공 통합, 명소 부분 볼드 적용 완료")
 
 # 4. database 폴더 내 사내 엑셀 DB 자동 스캔
 @st.cache_data(show_spinner=False)
@@ -289,13 +289,13 @@ with col2:
             st.warning("루팅 정보를 입력해 주세요.")
         else:
             st.session_state.generated_file = None
-            render_assistant_ui("working", "최신 초고속 엔진으로 엑셀 일정표를 빌드 중입니다! ⚡🔥")
+            render_assistant_ui("working", "정밀도 최우선 프로 엔진으로 고품질 일정표를 조립 중입니다... 잠시만 기다려 주세요! ⚡🔥")
             
-            with st.spinner("김똘망 사원이 정밀 조립하고 있습니다..."):
+            with st.spinner("김똘망 사원이 사내 DB와 규격을 대조하며 꼼꼼히 제작하고 있습니다..."):
                 try:
                     system_prompt = f"""
 당신은 15년 차 유럽 전문 랜드사의 수석 오퍼레이터입니다.
-아래 제공된 [사내 표준 엑셀 DB] 및 사용자의 입력을 바탕으로 고객 전달용 완벽한 엑셀 일정표 JSON을 신속하게 생성하세요.
+아래 제공된 [사내 표준 엑셀 DB] 및 사용자의 입력을 바탕으로 고객 전달용 완벽한 엑셀 일정표 JSON을 생성하세요.
 
 [사내 표준 엑셀 DB]
 {db_context if db_context else "(표준 랜드사 규격 준수)"}
@@ -368,30 +368,33 @@ with col2:
                         }
                     }
 
-                    # ★ 구글 권장 최신 지원 모델 (404 원천 차단)
-                    candidate_models = ['gemini-3.8-flash', 'gemini-3-flash']
+                    # ★ 1순위: 완성도 극대화 Pro 모델 -> 2순위: 404 없는 최신 Flash 백업
+                    candidate_models = ['gemini-2.5-pro', 'gemini-3.8-flash']
                     response = None
                     last_error = None
 
                     for model_name in candidate_models:
-                        try:
-                            response = client.models.generate_content(
-                                model=model_name,
-                                contents=system_prompt,
-                                config=types.GenerateContentConfig(
-                                    response_mime_type="application/json",
-                                    response_schema=json_schema
+                        for attempt in range(2):
+                            try:
+                                response = client.models.generate_content(
+                                    model=model_name,
+                                    contents=system_prompt,
+                                    config=types.GenerateContentConfig(
+                                        response_mime_type="application/json",
+                                        response_schema=json_schema
+                                    )
                                 )
-                            )
-                            if response and response.text:
-                                break
-                        except Exception as e:
-                            last_error = e
-                            time.sleep(1.0)
-                            continue
+                                if response and response.text:
+                                    break
+                            except Exception as e:
+                                last_error = e
+                                time.sleep(1.8)
+                                continue
+                        if response and response.text:
+                            break
 
                     if not response or not response.text:
-                        raise Exception(f"API 호출 지연: {last_error}")
+                        raise Exception(f"일정표 정밀 생성 지연: {last_error}")
 
                     raw_text = response.text.strip()
                     if "```" in raw_text:
@@ -719,7 +722,7 @@ with col2:
                     st.session_state.generated_file = output.getvalue()
                     st.session_state.generated_filename = file_name
                     st.session_state.ui_status = "success"
-                    st.session_state.ui_msg = "선배님! 요청하신 일정표 생성을 마쳤습니다! 다운로드해 주세요! 🙇‍♂️✨"
+                    st.session_state.ui_msg = "선배님! 정밀도 최우선 모델로 완벽한 일정표 생성을 마쳤습니다! 다운로드해 주세요! 🙇‍♂️✨"
                     st.rerun()
 
                 except Exception as e:
