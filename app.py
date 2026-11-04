@@ -276,7 +276,6 @@ with col2:
         """
         ui_placeholder.markdown(html_content, unsafe_allow_html=True)
 
-    # 저장된 세션 상태로 UI 표시
     render_assistant_ui(st.session_state.ui_status, st.session_state.ui_msg)
 
     generate_btn = st.button("🚀 엑셀 일정표 생성하기", type="primary", use_container_width=True)
@@ -289,7 +288,7 @@ with col2:
         elif "[옵션 B]" in input_mode and not routing_text.strip():
             st.warning("루팅 정보를 입력해 주세요.")
         else:
-            st.session_state.generated_file = None  # 이전 파일 초기화
+            st.session_state.generated_file = None
             render_assistant_ui("working", "초고속 엔진으로 엑셀 일정표를 빌드 중입니다! ⚡🔥")
             
             with st.spinner("김똘망 사원이 정밀 조립하고 있습니다..."):
@@ -369,7 +368,8 @@ with col2:
                         }
                     }
 
-                    candidate_models = ['gemini-2.5-flash', 'gemini-1.5-flash']
+                    # ★ 404 에러 없는 신규 SDK 지원 고속 모델 라인업
+                    candidate_models = ['gemini-2.5-flash', 'gemini-2.0-flash']
                     response = None
                     last_error = None
 
@@ -720,7 +720,6 @@ with col2:
                     final_title = tour_title.strip() if tour_title.strip() else "유럽투어"
                     file_name = f"{start_date.strftime('%Y-%m-%d')} {final_title} - 일정표.xlsx"
                     
-                    # 세션 상태에 생성된 파일 저장 (재실행 루프 방지)
                     st.session_state.generated_file = output.getvalue()
                     st.session_state.generated_filename = file_name
                     st.session_state.ui_status = "success"
@@ -732,7 +731,6 @@ with col2:
                     st.session_state.ui_msg = f"오류가 발생했습니다: {str(e)}"
                     st.error(f"오류 상세: {str(e)}")
 
-    # 파일이 생성되어 메모리에 보관되어 있으면 항상 고정 렌더링
     if st.session_state.generated_file:
         st.success("✅ 파일 준비 완료!")
         st.download_button(
