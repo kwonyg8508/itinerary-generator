@@ -293,7 +293,7 @@ with col2:
 특히 TK021(인천-이스탄불 아침출발편), TK1845, TK1844, TK2010, TK020 등의 출도착 시각을 정확히 확인해줘.
 """
                             search_res = client.models.generate_content(
-                                model='gemini-2.5-flash',
+                                model='gemini-3.8-flash',
                                 contents=search_prompt,
                                 config=types.GenerateContentConfig(
                                     tools=[{"google_search": {}}]
@@ -301,7 +301,7 @@ with col2:
                             )
                             flight_search_summary = search_res.text
                         except Exception:
-                            flight_search_summary = "TK021은 통상 오전 출발(10:45 경), TK020은 17:05 출발편임."
+                            flight_search_summary = "TK021은 오전 출발(10:45 경), TK020은 17:05 출발편임."
 
                     # 본문 프롬프트 작성
                     if "[옵션 A]" in input_mode:
@@ -393,7 +393,7 @@ with col2:
                     }
 
                     response = client.models.generate_content(
-                        model='gemini-2.5-flash',
+                        model='gemini-3.8-flash',
                         contents=system_prompt,
                         config=types.GenerateContentConfig(
                             response_mime_type="application/json",
@@ -422,7 +422,6 @@ with col2:
                         for r_item in item.get("rows", []):
                             if r_item.get("schedule") or r_item.get("city") or r_item.get("transport"):
                                 sc_clean = str(r_item.get("schedule") or "").replace("[", "").replace("]", "").strip()
-                                # '시내로 이동하여 관광 시작' 등 미사여구 제거
                                 if "시내로 이동하여" in sc_clean:
                                     sc_clean = re.sub(r"시내로\s*이동하여\s*(?:본격적인\s*)?관광\s*시작", "관광", sc_clean).strip()
                                 r_item["schedule"] = sc_clean
@@ -486,14 +485,12 @@ with col2:
                             tr = str(r.get("transport") or "").strip()
                             sc = str(r.get("schedule") or "").strip()
 
-                            # HH:MM 또는 '전  일' 아니면 삭제
                             if not re.match(r"^\d{1,2}:\d{2}$", tm) and tm != "전  일":
                                 r["time"] = ""
 
                             if sc.startswith("▶"):
                                 r["time"] = ""
 
-                            # 전용차량은 그 날 1회만 허용
                             if tr == "전용차량":
                                 if not bus_placed:
                                     bus_placed = True
