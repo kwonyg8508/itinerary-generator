@@ -281,7 +281,6 @@ with col2:
             
             with st.spinner("김똘망 사원이 규격 엑셀을 꼼꼼하게 제작 중입니다..."):
                 try:
-                    # 옵션에 따라 프롬프트 물리적 완전 분리
                     if "[옵션 A]" in input_mode:
                         system_prompt = f"""
 당신은 15년 차 유럽 전문 랜드사의 수석 오퍼레이터입니다.
@@ -296,8 +295,9 @@ with col2:
 [작성 규칙]
 1. 사내 DB 파일 중 가장 부합하는 템플릿의 전체 동선, 도시별 명소 문구(`▶ ~한 ...`), 식사, 호텔 규격을 그대로 적용하세요.
 2. 도시명(city)은 도시가 바뀔 때만 첫 행에 적고, 이어지는 일정은 빈칸("")으로 둡니다.
-3. 전일 육로 관광일의 2행에만 transport="전용차량", time="전  일"을 단 1회 표기합니다.
-4. 출력 포맷은 반드시 지정된 JSON 규격만 출력하세요.
+3. 전일 육로 관광일의 2행에만 transport="전용차량", time="전  일"을 단 1회 표기합니다. (오전/오후/저녁 표기 절대 금지)
+4. 마지막 날 인천 도착 후에는 '자택 휴식' 등의 불필요한 행을 절대 생성하지 마세요.
+5. 출력 포맷은 반드시 지정된 JSON 규격만 출력하세요.
 """
                     else:
                         system_prompt = f"""
@@ -309,43 +309,36 @@ with col2:
 {routing_text}
 
 [핵심 작성 및 파싱 절대 규칙 - 위반 금지]
-1. 항공 스케줄(편명/시간/경유) 원본 100% 반영:
-   - 텍스트에 있는 항공 편명(예: TK021, TK1845, TK2010, TK020)과 시간(예: 20:45, 12:50, 07:35, 17:05 등)을 절대로 '항공편명' 따위로 뭉개지 말고 transport와 time 칸에 정확히 적으세요.
-   - 경유지가 있을 경우 반드시 [출발 공항] -> [경유지 환승] -> [최종 도착지]를 각각 별도 행으로 상세히 분리하세요.
-   - 예시 (1일차 경유편):
+1. 항공 스케줄(편명/시간/경유) 원본 100% 보존 및 매핑:
+   - 텍스트에 명시된 항공 편명(예: TK021, TK1845, TK1844, TK2010, TK020)은 반드시 해당 항공 이동 행의 transport 칸에 기재하세요.
+   - 시간(time) 칸에는 사용자가 텍스트에 직접 기재한 '실제 시각(예: 20:45, 12:50, 07:35, 09:00, 17:05, 08:55)'만 정확히 적으세요.
+   - **'오전', '오후', '저녁', '늦은 오후' 같은 모호한 단어는 time 칸에 절대 넣지 마세요 (무조건 빈칸("") 처리).**
+   - 1일차 경유편의 경우:
      * 행1: city="인천", transport="", time="", schedule="인천 국제공항 집결 후 출국 수속"
-     * 행2: city="", transport="TK021", time="", schedule="인천 출발 / 이스탄불 향발 (기내식 2회, 비행시간 약 11시간 30분)"
-     * 행3: city="이스탄불", transport="", time="", schedule="이스탄불 국제공항 도착 후 환승 대기"
+     * 행2: city="", transport="TK021", time="", schedule="인천 출발 / 이스탄불 향발 (비행시간 약 11시간 30분)"
+     * 행3: city="이스탄불", transport="", time="", schedule="이스탄불 공항 도착 후 환승 대기"
      * 행4: city="", transport="TK1845", time="", schedule="이스탄불 출발 / 아테네 향발"
-     * 행5: city="아테네", transport="", time="20:45", schedule="아테네 국제공항 도착 후 가이드 미팅"
+     * 행5: city="아테네", transport="", time="20:45", schedule="아테네 공항 도착 후 가이드 미팅"
      * 행6: city="", transport="", time="", schedule="호텔 투숙 및 휴식"
 
-2. 도시별 지리적 정확성 및 명소 풍성도 (각 도시마다 최소 3~5개 명소 필수):
-   - 대충 1~2줄로 축약하지 마세요. 각 도시/지역마다 대표 유료/무료 명소를 ' ▶ ~한 [명소명](내부/외관/조망)' 형식으로 개별 행으로 작성하세요.
-   - 타 도시의 명소를 엉뚱하게 섞지 마세요 (예: 아테네 일정에 이스탄불 성소피아를 넣는 행위 절대 엄금!).
+2. 교통편('전용차량') 및 시간('전  일') 표기 엄격 제한:
+   - **전일 육로 관광일의 경우: 오직 그 날의 2번째 행(조식 후 첫 이동/관광 시작 행)에만 단 1회 transport="전용차량", time="전  일"을 적습니다.**
+   - 같은 날 오후, 저녁 이동 행에 transport="전용차량"을 중복으로 적거나 time에 '오후', '저녁'을 적는 행위를 엄격히 금지합니다 (무조건 빈칸("")).
+
+3. 도시별 지리적 정확성 및 명소 풍성도 (각 도시마다 최소 3~5개 명소 필수):
+   - 각 도시/지역마다 대표 유료/무료 명소를 ' ▶ ~한 [명소명](내부/외관/조망)' 형식으로 풍성하게 개별 행으로 작성하세요.
+   - 타 도시의 명소를 엉뚱하게 섞지 마세요 (예: 아테네 일정에 이스탄불 성소피아를 넣는 행위 절대 금지!).
    - 그리스 명소 기준: 파르테논 신전(내부), 에레크테이온 신전, 아크로폴리스 언덕, 근대 올림픽 경기장(조망), 신타그마 광장, 플라카 지구 등.
    - 고린도 명소 기준: 고린도 운하(조망), 고대 고린도 유적지 및 아폴론 신전 등.
-   - 이스탄불 명소 기준: 블루모스크(술탄아흐메트)(내부), 아야소피아(외관 또는 내부), 톱카프 궁전(외관), 보스포러스 해협 유람선, 히포드롬 광장, 그랜드 바자르 등.
+   - 이스탄불 명소 기준: 블루모스크(내부), 아야소피아(외관 또는 내부), 톱카프 궁전(외관), 보스포러스 해협 유람선, 히포드롬 광장, 그랜드 바자르 등.
    - 카파도키아 명소 기준: 괴레메 야외 박물관(내부), 데린쿠유 지하도시(내부), 우치히사르 요새(조망), 파샤바 계곡, 데브란트 계곡 등.
-   - 파묵칼레/에페소/쉬린제 명소 기준: 파묵칼레 석회붕 및 히에라폴리스, 에페소 켈수스 도서관, 원형 대극장, 하드리아누스 신전, 쉬린제 와인 시음 등.
+   - 파묵칼레/에페소/쉬린제 명소 기준: 파묵칼레 석회붕 및 히에라폴리스, 에페소 켈수스 도서관, 원형 대극장, 하드리아누스 신전, 쉬린제 마을 등.
 
-3. 표기 규격:
-   - 도시명(city): 도시가 변경되는 첫 행에만 기재하고, 같은 도시 일정이 이어지면 빈칸("").
-   - 교통편(transport): 전일 육로 관광일에는 2행에 "전용차량", time은 "전  일" 1회 기재. 항공 이동 시에는 해당 항공편명과 시간 정확히 기재.
-   - 호텔/식사: 현지 랜드사 표준에 맞게 조/중/석 및 호텔명을 정확히 표기 (마지막 행은 항상 '호텔 투숙 및 휴식', hotel은 'HOTEL : ANY 4* HOTEL CLASS' 규격).
+4. 마지막 날 인천 도착 규격:
+   - 제09일 인천 도착 행: city="인천", transport="", time="08:55", schedule="인천 국제공항 도착 후 해산"
+   - **인천 도착 행 이후에 '자택 휴식', '귀가' 등의 추가 행을 절대 만들지 마세요.** hotel도 빈칸("")으로 비워둡니다.
 
 [출력 포맷: 순수 JSON 배열만 출력]
-[
-  {{
-    "day": 1,
-    "rows": [
-      {{"city": "인천", "transport": "", "time": "", "schedule": "인천 국제공항 집결 후 출국 수속"}},
-      {{"city": "", "transport": "TK021", "time": "23:35", "schedule": "인천 출발 / 이스탄불 향발"}}
-    ],
-    "meals": ["-", "-", "기내식"],
-    "hotel": "HOTEL : 기내 숙박"
-  }}
-]
 """
 
                     response = client.models.generate_content(
@@ -373,6 +366,7 @@ with col2:
                     font_header = Font(name="맑은 고딕", size=10, bold=True)
                     font_body = Font(name="맑은 고딕", size=9)
                     font_bold = Font(name="맑은 고딕", size=9, bold=True)
+                    font_notice = Font(name="맑은 고딕", size=9, italic=True, color="555555")
                     
                     fill_title = PatternFill(start_color="FFFFCC", end_color="FFFFCC", fill_type="solid")
                     fill_hotel = PatternFill(start_color="EFEFEF", end_color="EFEFEF", fill_type="solid")
@@ -427,7 +421,8 @@ with col2:
                         hotel_str = item.get("hotel", "")
                         meals = item.get("meals", ["-", "-", "-"])
                         
-                        has_hotel = bool(hotel_str.strip())
+                        # 마지막 날 인천 도착 시 호텔칸 제외
+                        has_hotel = bool(hotel_str.strip()) and not ("인천" in str(rows_data[0].get("city", "")) and "도착" in str(rows_data[0].get("schedule", "")))
                         total_rows = max(len(rows_data), 3) + (1 if has_hotel else 0)
                         
                         for r_idx in range(total_rows):
@@ -484,11 +479,19 @@ with col2:
                         
                         cur_row += total_rows
                     
+                    # 최하단 안내 문구 추가 (한 줄 띄고 가운데 정렬)
+                    notice_row = cur_row + 1
+                    ws.row_dimensions[notice_row].height = 20.0
+                    notice_cell = ws.cell(notice_row, 1, "* 상기 일정은 현지 사정에 따라 변경될 수 있습니다 *")
+                    notice_cell.font = font_notice
+                    notice_cell.alignment = align_center
+                    ws.merge_cells(start_row=notice_row, start_column=1, end_row=notice_row, end_column=7)
+                    
                     output = io.BytesIO()
                     wb.save(output)
                     output.seek(0)
                     
-                    render_assistant_ui("success", "선배님! 정밀 항공편명과 지역 명소를 빈틈없이 꽉 채워 제작 완료했습니다! 🙇‍♂️✨")
+                    render_assistant_ui("success", "선배님! 불필요한 단어 싹 쳐내고 정확한 항공시간과 하단 안내문까지 완벽 반영했습니다! 🙇‍♂️✨")
                     
                     final_title = tour_title.strip() if tour_title.strip() else "유럽투어"
                     file_name = f"{start_date.strftime('%Y-%m-%d')} {final_title} - 일정표.xlsx"
