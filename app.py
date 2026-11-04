@@ -368,24 +368,20 @@ with col2:
                         }
                     }
 
-                    # ★ 최신 지원 플래시 모델로 교체 (404 완벽 차단)
-                    candidate_models = ['gemini-3.8-flash', 'gemini-2.5-flash']
+                    # ★ 구글 권장 최신 지원 모델 (404 원천 차단)
+                    candidate_models = ['gemini-3.8-flash', 'gemini-3-flash']
                     response = None
                     last_error = None
 
                     for model_name in candidate_models:
                         try:
-                            cfg_dict = {
-                                "response_mime_type": "application/json",
-                                "response_schema": json_schema
-                            }
-                            if "2.5" in model_name or "3." in model_name:
-                                cfg_dict["thinking_config"] = types.ThinkingConfig(thinking_budget=0)
-
                             response = client.models.generate_content(
                                 model=model_name,
                                 contents=system_prompt,
-                                config=types.GenerateContentConfig(**cfg_dict)
+                                config=types.GenerateContentConfig(
+                                    response_mime_type="application/json",
+                                    response_schema=json_schema
+                                )
                             )
                             if response and response.text:
                                 break
