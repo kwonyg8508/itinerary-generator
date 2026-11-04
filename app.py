@@ -295,51 +295,31 @@ with col2:
 [작성 규칙]
 1. 사내 DB 파일 중 가장 부합하는 템플릿의 전체 동선, 도시별 명소 문구(`▶ ~한 ...`), 식사, 호텔 규격을 그대로 적용하세요.
 2. 명소 이름에 대괄호([])를 절대 사용하지 마세요.
-3. 도시명(city)은 도시가 바뀔 때만 첫 행에 적고, 이어지는 일정은 빈칸("")으로 둡니다.
-4. 전일 육로 관광일의 2행에만 transport="전용차량", time="전  일"을 단 1회 표기합니다.
-5. 마지막 날 인천 도착 후에는 '자택 휴식' 등의 불필요한 행을 절대 생성하지 마세요.
+3. 마지막 날 인천 도착 후에는 '자택 휴식' 등의 불필요한 행을 절대 생성하지 마세요.
 """
                     else:
                         system_prompt = f"""
 당신은 15년 차 유럽 전문 랜드사의 수석 오퍼레이터입니다.
 사용자가 입력한 아래 루팅 정보를 바탕으로, 대형 여행사 제출용 최고급 상세 일정표를 생성하세요.
-사내 DB에 얽매이지 말고, 텍스트에 적힌 항공 편명/시간/경유 동선을 100% 보존하고 각 도시 명소를 풍성하게 확장하세요.
 
 [사용자 입력 루팅 원본]
 {routing_text}
 
 [핵심 작성 및 파싱 절대 규칙 - 위반 금지]
 1. 날짜(day) 단위 통합:
-   - 각 일자(제1일, 제2일...)는 반드시 하나의 객체로 만들고, 그 날의 모든 일정 행들을 'rows' 배열 안에 순서대로 넣으세요.
-2. 항공 스케줄 표기 엄격 규격 (출발 행과 도착 행 반드시 2행 분리):
-   - 항공 이동은 반드시 [출발 행]과 [도착 행]으로 각각 1행씩 나누어 작성합니다.
+   - 각 일자(day=1, 2, 3...)는 1개의 객체로 묶고 해당 일자의 모든 행을 'rows' 리스트에 순서대로 넣으세요.
+2. 항공 스케줄(출발/도착 2행 분리):
+   - 항공 이동은 반드시 [출발 행]과 [도착 행]으로 나누어 작성하세요.
    - [출발 행]: transport="항공편명", time="출발시간", schedule="~공항 출발 / ~공항 향발"
-   - [도착 행]: transport="", time="도착시간", schedule="~공항 도착 후 가이드 미팅 (또는 환승)"
-   - [예시 3일차 TK1844]:
-     행1: city="아테네", transport="", time="", schedule="호텔 조식 후 아테네 공항으로 이동"
-     행2: city="", transport="TK1844", time="", schedule="아테네 출발 / 이스탄불 향발"
-     행3: city="이스탄불", transport="", time="12:50", schedule="이스탄불 공항 도착 후 가이드 미팅"
-     행4: city="", transport="전용차량", time="전  일", schedule="이스탄불 시내로 이동하여 본격적인 투어 시작"
-     행5: city="", transport="", time="", schedule="▶ 명소..."
-   - [예시 4일차 TK2010 0735-0900]:
-     행1: city="이스탄불", transport="", time="", schedule="호텔 조식 후 공항으로 이동"
-     행2: city="", transport="TK2010", time="07:35", schedule="이스탄불 출발 / 카이세리(카파도키아) 향발"
-     행3: city="카파도키아", transport="", time="09:00", schedule="카파도키아 공항 도착 후 가이드 미팅"
-     행4: city="", transport="전용차량", time="전  일", schedule="기이한 화산암 지대 카파도키아 본격 탐방"
-     행5: city="", transport="", time="", schedule="▶ 명소..."
-   - '오전', '오후', '저녁' 같은 단어는 time 칸에 절대 금지 (무조건 빈칸("")).
-3. 대괄호([]) 절대 사용 금지:
-   - 명소 이름이나 텍스트 어디에도 [ ] 대괄호를 절대 넣지 마세요.
-   - 나쁜 예: ▶ 고대 그리스의 걸작 [파르테논 신전](내부) 관람
-   - 좋은 예: ▶ 고대 그리스의 걸작 파르테논 신전(내부) 관람
-4. 명소 행 시작 규칙:
-   - 항공 이동이 있는 날은 반드시 공항 도착 및 가이드 미팅 행이 끝난 바로 다음 행부터 본격적인 ' ▶ ~' 관광 명소 행이 시작되어야 합니다.
-5. 마지막 날 인천 도착 규격:
-   - 마지막 날 rows는 1개 행만 작성: city="인천", transport="", time="08:55", schedule="인천 국제공항 도착 후 해산"
-   - hotel은 빈칸("") 처리.
+   - [도착 행]: transport="", time="도착시간", schedule="~공항 도착 후 가이드 미팅"
+   - 항공 도착 행 이후부터 본격적인 관광 명소('▶ ~') 행이 시작됩니다.
+3. 명소 및 대괄호 규칙:
+   - 대괄호([])는 절대로 사용하지 마세요.
+   - 각 방문 지역마다 3~5개의 대표 명소를 ' ▶ ~한 [명소명]'이 아닌 ' ▶ ~한 명소명' 형태로 작성하세요.
+4. 마지막 날 규격:
+   - 마지막 날 인천 도착 행: schedule="인천 국제공항 도착 후 해산", time="도착시간", hotel="" 처리.
 """
 
-                    # 엄격한 JSON 스키마
                     json_schema = {
                         "type": "ARRAY",
                         "items": {
@@ -385,7 +365,7 @@ with col2:
                     
                     parsed_raw = json.loads(raw_text)
                     
-                    # Day 병합 보정 로직
+                    # 1. Day 병합 및 데이터 정제
                     day_dict = {}
                     for item in parsed_raw:
                         d_num = item.get("day", 1)
@@ -398,7 +378,6 @@ with col2:
                             }
                         for r_item in item.get("rows", []):
                             if r_item.get("schedule") or r_item.get("city") or r_item.get("transport"):
-                                # 혹시 남아있을 수 있는 대괄호 강제 제거
                                 sc_clean = str(r_item.get("schedule") or "").replace("[", "").replace("]", "")
                                 r_item["schedule"] = sc_clean
                                 day_dict[d_num]["rows"].append(r_item)
@@ -408,8 +387,33 @@ with col2:
                             day_dict[d_num]["meals"] = item.get("meals")
 
                     parsed_days = [day_dict[k] for k in sorted(day_dict.keys())]
-                    
-                    # 엑셀 워크북 생성
+
+                    # 2. 실무 랜드사 서식 강제 후처리 (도시 중복 제거 & 전용차량 1회 제한)
+                    for item in parsed_days:
+                        last_city = None
+                        bus_already_set = False
+                        for r_data in item["rows"]:
+                            curr_city = str(r_data.get("city") or "").strip()
+                            if curr_city:
+                                if curr_city == last_city:
+                                    r_data["city"] = "" # 같은 도시 연속 시 빈칸 처리
+                                else:
+                                    last_city = curr_city
+                            
+                            # 전용차량은 그 날 1회만 허용 (나머지 중복 전용차량 강제 삭제)
+                            curr_tr = str(r_data.get("transport") or "").strip()
+                            if curr_tr == "전용차량":
+                                if not bus_already_set:
+                                    bus_already_set = True
+                                    r_data["time"] = "전  일"
+                                else:
+                                    r_data["transport"] = ""
+                                    if r_data.get("time") in ["전  일", "오전", "오후", "저녁", "늦은 오후"]:
+                                        r_data["time"] = ""
+                            elif curr_tr and "TK" in curr_tr:
+                                pass # 항공편명은 유지
+
+                    # 3. 엑셀 워크북 생성
                     wb = openpyxl.Workbook()
                     ws = wb.active
                     ws.title = "일정표"
@@ -419,8 +423,6 @@ with col2:
                     font_header = Font(name="맑은 고딕", size=10, bold=True)
                     font_body = Font(name="맑은 고딕", size=9)
                     font_bold = Font(name="맑은 고딕", size=9, bold=True)
-                    
-                    # 최하단 안내 문구: 11포인트, 붉은색, 볼드체
                     font_notice_red = Font(name="맑은 고딕", size=11, bold=True, color="FF0000")
                     
                     fill_title = PatternFill(start_color="FFFFCC", end_color="FFFFCC", fill_type="solid")
@@ -458,7 +460,7 @@ with col2:
                     ws.merge_cells("F3:G3")
                     
                     # 열 너비 설정
-                    col_widths = {1: 9.25, 2: 12.75, 3: 11.0, 4: 9.25, 5: 64.25, 6: 3.63, 7: 10.0}
+                    col_widths = {1: 10.0, 2: 12.75, 3: 11.0, 4: 9.25, 5: 64.25, 6: 3.63, 7: 10.0}
                     for c_idx, width in col_widths.items():
                         ws.column_dimensions[get_column_letter(c_idx)].width = width
                     
@@ -502,11 +504,18 @@ with col2:
                                     cell.fill = fill_hotel
                                 cell.border = Border(top=b_top, bottom=b_bottom, left=b_left, right=b_right)
                         
-                        # 1열 날짜
-                        ws.cell(cur_row, 1, day_str).font = font_bold
-                        ws.cell(cur_row, 1).alignment = align_center
-                        ws.cell(cur_row + 1, 1, date_str).alignment = align_center
-                        ws.cell(cur_row + 2, 1, weekday_str).alignment = align_center
+                        # 1열 날짜/요일 확실하게 작성 (강제 기입)
+                        cell_d1 = ws.cell(cur_row, 1, day_str)
+                        cell_d1.font = font_bold
+                        cell_d1.alignment = align_center
+                        
+                        cell_d2 = ws.cell(cur_row + 1, 1, date_str)
+                        cell_d2.font = font_body
+                        cell_d2.alignment = align_center
+                        
+                        cell_d3 = ws.cell(cur_row + 2, 1, weekday_str)
+                        cell_d3.font = font_body
+                        cell_d3.alignment = align_center
                         
                         # 2~5열 일정
                         for idx, r_data in enumerate(rows_data):
@@ -539,7 +548,7 @@ with col2:
                         
                         cur_row += total_rows
                     
-                    # 최하단 안내 문구: 한 줄 띄고 11포인트 붉은색 볼드체
+                    # 최하단 안내 문구: 한 줄 띄고 11pt 붉은색 볼드 가운데 정렬
                     notice_row = cur_row + 1
                     ws.row_dimensions[notice_row].height = 22.0
                     notice_cell = ws.cell(notice_row, 1, "* 상기 일정은 현지 사정에 따라 변경될 수 있습니다 *")
@@ -551,7 +560,7 @@ with col2:
                     wb.save(output)
                     output.seek(0)
                     
-                    render_assistant_ui("success", "선배님! 대괄호 제거, 항공 출발/도착 2행 분리, 11pt 붉은색 안내문까지 칼적용했습니다! 🙇‍♂️✨")
+                    render_assistant_ui("success", "선배님! 1열 날짜/요일 복구 및 도시/차량 중복 싹 쳐내어 정돈했습니다! 🙇‍♂️✨")
                     
                     final_title = tour_title.strip() if tour_title.strip() else "유럽투어"
                     file_name = f"{start_date.strftime('%Y-%m-%d')} {final_title} - 일정표.xlsx"
