@@ -26,7 +26,7 @@ if "generated_filename" not in st.session_state:
 if "ui_status" not in st.session_state:
     st.session_state.ui_status = "idle"
 if "ui_msg" not in st.session_state:
-    st.session_state.ui_msg = "선배님! 초고속 Flash 엔진 세팅 완료되었습니다. 요청해 주세요! ☕"
+    st.session_state.ui_msg = "선배님! 최신 초고속 엔진 세팅 완료되었습니다. 요청해 주세요! ☕"
 
 # 3. 커스텀 CSS
 st.markdown("""
@@ -147,7 +147,7 @@ html, body, [class*="css"] {
 """, unsafe_allow_html=True)
 
 st.title("🇪🇺 유럽 일정표 자동 생성 시스템 (Master Edition)")
-st.caption("실무 완판 규격: 세션 락업 방지, 아시아나/대한항공 통합, 명소 부분 볼드 적용 완료")
+st.caption("실무 완판 규격: 최신 Flash 모델 적용, 세션 락업 방지, 명소 부분 볼드 서식 탑재")
 
 # 4. database 폴더 내 사내 엑셀 DB 자동 스캔
 @st.cache_data(show_spinner=False)
@@ -289,7 +289,7 @@ with col2:
             st.warning("루팅 정보를 입력해 주세요.")
         else:
             st.session_state.generated_file = None
-            render_assistant_ui("working", "초고속 엔진으로 엑셀 일정표를 빌드 중입니다! ⚡🔥")
+            render_assistant_ui("working", "최신 초고속 엔진으로 엑셀 일정표를 빌드 중입니다! ⚡🔥")
             
             with st.spinner("김똘망 사원이 정밀 조립하고 있습니다..."):
                 try:
@@ -368,8 +368,8 @@ with col2:
                         }
                     }
 
-                    # ★ 404 에러 없는 신규 SDK 지원 고속 모델 라인업
-                    candidate_models = ['gemini-2.5-flash', 'gemini-2.0-flash']
+                    # ★ 최신 지원 플래시 모델로 교체 (404 완벽 차단)
+                    candidate_models = ['gemini-3.8-flash', 'gemini-2.5-flash']
                     response = None
                     last_error = None
 
@@ -379,7 +379,7 @@ with col2:
                                 "response_mime_type": "application/json",
                                 "response_schema": json_schema
                             }
-                            if "2.5" in model_name:
+                            if "2.5" in model_name or "3." in model_name:
                                 cfg_dict["thinking_config"] = types.ThinkingConfig(thinking_budget=0)
 
                             response = client.models.generate_content(
