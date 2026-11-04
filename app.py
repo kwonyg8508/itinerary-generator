@@ -279,7 +279,7 @@ with col2:
         else:
             render_assistant_ui("working", "입력 데이터 정밀 분석 및 행별 서식 매핑 작업 진행 중입니다! ⌨️🔥")
             
-            with st.spinner("김똘망 사원이 규격 엑셀을 꼼꼼하게 제작 중입니다..."):
+            with st.spinner("김똘망 사원이 사내 규격대로 꼼꼼히 정리 중입니다..."):
                 try:
                     if "[옵션 A]" in input_mode:
                         system_prompt = f"""
@@ -295,7 +295,9 @@ with col2:
 [작성 규칙]
 1. 사내 DB 파일 중 가장 부합하는 템플릿의 전체 동선, 도시별 명소 문구(`▶ ~한 ...`), 식사, 호텔 규격을 그대로 적용하세요.
 2. 명소 이름에 대괄호([])를 절대 사용하지 마세요.
-3. 마지막 날 인천 도착 후에는 '자택 휴식' 등의 불필요한 행을 절대 생성하지 마세요.
+3. 호텔 조식이 있는 날은 1행에 '호텔 조식 후'를 단독으로 작성하세요.
+4. 식사는 반드시 '호텔식', '현지식', '한   식', '중국식' 중에서만 선택하세요.
+5. 호텔 표기: 튀르키예/터키 지역은 'ANY 5* HOTEL 또는 동급', 그 외 지역은 'ANY 4* HOTEL 또는 동급'으로 작성하세요.
 """
                     else:
                         system_prompt = f"""
@@ -308,16 +310,24 @@ with col2:
 [핵심 작성 및 파싱 절대 규칙 - 위반 금지]
 1. 날짜(day) 단위 통합:
    - 각 일자(day=1, 2, 3...)는 1개의 객체로 묶고 해당 일자의 모든 행을 'rows' 리스트에 순서대로 넣으세요.
-2. 항공 스케줄(출발/도착 2행 분리):
-   - 항공 이동은 반드시 [출발 행]과 [도착 행]으로 나누어 작성하세요.
+2. '호텔 조식 후' 단독 행 분리:
+   - 2일차부터 아침에 시작할 때는 반드시 schedule="호텔 조식 후"를 단독 1행으로 작성하세요.
+   - 그 다음 행에 schedule="~로 이동" 또는 관광 명소 행이 시작되어야 합니다.
+3. 항공 이동 표기 규격:
    - [출발 행]: transport="항공편명", time="출발시간", schedule="~공항 출발 / ~공항 향발"
    - [도착 행]: transport="", time="도착시간", schedule="~공항 도착 후 가이드 미팅"
-   - 항공 도착 행 이후부터 본격적인 관광 명소('▶ ~') 행이 시작됩니다.
-3. 명소 및 대괄호 규칙:
+   - 사용자가 텍스트에 적은 시간(예: 20:45, 12:50, 07:35, 09:00, 17:05, 08:55 등)을 반드시 정확히 기재하세요.
+4. 명소 및 대괄호 규칙:
    - 대괄호([])는 절대로 사용하지 마세요.
-   - 각 방문 지역마다 3~5개의 대표 명소를 ' ▶ ~한 [명소명]'이 아닌 ' ▶ ~한 명소명' 형태로 작성하세요.
-4. 마지막 날 규격:
-   - 마지막 날 인천 도착 행: schedule="인천 국제공항 도착 후 해산", time="도착시간", hotel="" 처리.
+   - 각 지역마다 3~4개의 명소를 ' ▶ ~한 명소명' 형태로 개별 행으로 작성하세요.
+5. 식사 표기 규칙:
+   - meals 배열의 조, 중, 석은 반드시 다음 4가지 표준 명칭만 사용하세요: "호텔식", "현지식", "한   식", "중국식" (기내식인 경우 "기내식", 없을 경우 "-").
+6. 호텔 표기 규칙:
+   - 이스탄불, 카파도키아, 파묵칼레, 마니사 등 튀르키예(터키) 지역: "ANY 5* HOTEL 또는 동급"
+   - 아테네 등 그리스 및 기타 유럽 지역: "ANY 4* HOTEL 또는 동급"
+   - 1일차 기내박인 경우: "기내 숙박", 마지막 날 인천 도착: "" (빈칸)
+7. 마지막 날 규격:
+   - 마지막 날 인천 도착 행: schedule="인천 국제공항 도착 후 해산", time="08:55", hotel="" 처리.
 """
 
                     json_schema = {
@@ -365,7 +375,7 @@ with col2:
                     
                     parsed_raw = json.loads(raw_text)
                     
-                    # 1. Day 병합 및 데이터 정제
+                    # 1. Day 병합 및 기본 정제
                     day_dict = {}
                     for item in parsed_raw:
                         d_num = item.get("day", 1)
@@ -378,40 +388,101 @@ with col2:
                             }
                         for r_item in item.get("rows", []):
                             if r_item.get("schedule") or r_item.get("city") or r_item.get("transport"):
-                                sc_clean = str(r_item.get("schedule") or "").replace("[", "").replace("]", "")
+                                sc_clean = str(r_item.get("schedule") or "").replace("[", "").replace("]", "").strip()
                                 r_item["schedule"] = sc_clean
                                 day_dict[d_num]["rows"].append(r_item)
                         if item.get("hotel"):
-                            day_dict[d_num]["hotel"] = str(item.get("hotel")).replace("[", "").replace("]", "")
-                        if item.get("meals") and any(m != "-" for m in item.get("meals")):
+                            day_dict[d_num]["hotel"] = str(item.get("hotel")).replace("[", "").replace("]", "").strip()
+                        if item.get("meals"):
                             day_dict[d_num]["meals"] = item.get("meals")
 
                     parsed_days = [day_dict[k] for k in sorted(day_dict.keys())]
 
-                    # 2. 실무 랜드사 서식 강제 후처리 (도시 중복 제거 & 전용차량 1회 제한)
+                    # 2. 실무 파이썬 후처리 (도시 단일화, 전용차량 1회 제한, 주야간 제거, 식사 및 호텔 강제)
+                    valid_meals = ["호텔식", "현지식", "한   식", "중국식", "기내식", "-"]
+                    turkey_keywords = ["이스탄불", "카파도키아", "파묵칼레", "마니사", "쉬린제", "에페소", "터키", "튀르키예", "카이세리", "네브셰히르", "안탈리아", "쿠샤다시"]
+
                     for item in parsed_days:
-                        last_city = None
-                        bus_already_set = False
-                        for r_data in item["rows"]:
-                            curr_city = str(r_data.get("city") or "").strip()
-                            if curr_city:
-                                if curr_city == last_city:
-                                    r_data["city"] = "" # 같은 도시 연속 시 빈칸 처리
+                        d_num = item["day"]
+                        rows = item["rows"]
+                        
+                        # (1) '호텔 조식 후' 단독 행 분리
+                        if len(rows) > 0:
+                            first_sc = rows[0].get("schedule", "")
+                            if "호텔 조식 후" in first_sc and len(first_sc) > 8:
+                                remainder = first_sc.replace("호텔 조식 후", "").strip()
+                                if remainder.startswith("후"):
+                                    remainder = remainder[1:].strip()
+                                rows[0]["schedule"] = "호텔 조식 후"
+                                rows.insert(1, {"city": "", "transport": "", "time": "", "schedule": remainder})
+
+                        # (2) 도시명 단일화: 일자 대표 도시 1개만 첫 행에 유지, 나머지는 빈칸("")
+                        primary_city = ""
+                        for r in rows:
+                            c = str(r.get("city") or "").strip()
+                            if c:
+                                primary_city = c
+                                break
+                        for idx, r in enumerate(rows):
+                            if idx == 0 and primary_city:
+                                r["city"] = primary_city
+                            else:
+                                r["city"] = ""
+
+                        # (3) '주간', '야간' 제거 및 전용차량 1회 제한
+                        bus_placed = False
+                        for r in rows:
+                            tm = str(r.get("time") or "").strip()
+                            if tm in ["주간", "야간", "오전", "오후", "저녁", "늦은 오후", "출발시간", "도착시간"]:
+                                r["time"] = ""
+
+                            tr = str(r.get("transport") or "").strip()
+                            if tr == "전용차량":
+                                if not bus_placed:
+                                    bus_placed = True
+                                    r["time"] = "전  일"
                                 else:
-                                    last_city = curr_city
-                            
-                            # 전용차량은 그 날 1회만 허용 (나머지 중복 전용차량 강제 삭제)
-                            curr_tr = str(r_data.get("transport") or "").strip()
-                            if curr_tr == "전용차량":
-                                if not bus_already_set:
-                                    bus_already_set = True
-                                    r_data["time"] = "전  일"
-                                else:
-                                    r_data["transport"] = ""
-                                    if r_data.get("time") in ["전  일", "오전", "오후", "저녁", "늦은 오후"]:
-                                        r_data["time"] = ""
-                            elif curr_tr and "TK" in curr_tr:
-                                pass # 항공편명은 유지
+                                    r["transport"] = ""
+                                    if r.get("time") == "전  일":
+                                        r["time"] = ""
+
+                        # (4) 식사 규격화 (4종 강제)
+                        cleaned_meals = []
+                        for m in item.get("meals", []):
+                            m_str = str(m or "").strip()
+                            if "호텔" in m_str or "조식" in m_str:
+                                cleaned_meals.append("호텔식")
+                            elif "한식" in m_str:
+                                cleaned_meals.append("한   식")
+                            elif "중식" in m_str or "중국" in m_str:
+                                cleaned_meals.append("중국식")
+                            elif "기내" in m_str:
+                                cleaned_meals.append("기내식")
+                            elif "현지" in m_str or "외식" in m_str or "특식" in m_str or "케밥" in m_str:
+                                cleaned_meals.append("현지식")
+                            elif m_str in valid_meals:
+                                cleaned_meals.append(m_str)
+                            else:
+                                cleaned_meals.append("현지식" if m_str != "-" else "-")
+                        while len(cleaned_meals) < 3:
+                            cleaned_meals.append("-")
+                        item["meals"] = cleaned_meals[:3]
+
+                        # (5) 호텔 규격 강제 분기
+                        is_turkey = any(tk in primary_city for tk in turkey_keywords)
+                        if not is_turkey:
+                            all_text = " ".join([r.get("schedule", "") for r in rows])
+                            is_turkey = any(tk in all_text for tk in turkey_keywords)
+
+                        if d_num == 1 and ("기내" in item.get("hotel", "") or "기내" in item["meals"][2]):
+                            item["hotel"] = "HOTEL : 기내 숙박"
+                        elif d_num == len(parsed_days) or "인천" in primary_city:
+                            item["hotel"] = ""
+                        else:
+                            if is_turkey:
+                                item["hotel"] = "HOTEL : ANY 5* HOTEL 또는 동급"
+                            else:
+                                item["hotel"] = "HOTEL : ANY 4* HOTEL 또는 동급"
 
                     # 3. 엑셀 워크북 생성
                     wb = openpyxl.Workbook()
@@ -504,7 +575,7 @@ with col2:
                                     cell.fill = fill_hotel
                                 cell.border = Border(top=b_top, bottom=b_bottom, left=b_left, right=b_right)
                         
-                        # 1열 날짜/요일 확실하게 작성 (강제 기입)
+                        # 1열 날짜/요일 기입
                         cell_d1 = ws.cell(cur_row, 1, day_str)
                         cell_d1.font = font_bold
                         cell_d1.alignment = align_center
@@ -560,7 +631,7 @@ with col2:
                     wb.save(output)
                     output.seek(0)
                     
-                    render_assistant_ui("success", "선배님! 1열 날짜/요일 복구 및 도시/차량 중복 싹 쳐내어 정돈했습니다! 🙇‍♂️✨")
+                    render_assistant_ui("success", "선배님! 도시/시간/식사/호텔 규격을 완벽하게 정돈하여 엑셀 생성을 마쳤습니다! 🙇‍♂️✨")
                     
                     final_title = tour_title.strip() if tour_title.strip() else "유럽투어"
                     file_name = f"{start_date.strftime('%Y-%m-%d')} {final_title} - 일정표.xlsx"
