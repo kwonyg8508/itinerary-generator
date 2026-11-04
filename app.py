@@ -137,7 +137,7 @@ html, body, [class*="css"] {
 """, unsafe_allow_html=True)
 
 st.title("🇪🇺 유럽 일정표 자동 생성 시스템 (Master Edition)")
-st.caption("실무 완판 규격: 아시아나 DB ➔ 대한항공 자동 전환, 관광지 설명 일반체/명소명 볼드 분리, 기내 숙박 및 도착 도시 자동 연동")
+st.caption("실무 완판 규격: 초고속 Flash 엔진 탑재, 아시아나/대한항공 통합, 명소 볼드 분리 완료")
 
 # 3. database 폴더 내 사내 엑셀 DB 자동 스캔
 @st.cache_data(show_spinner=False)
@@ -156,7 +156,7 @@ def load_company_database():
             ws = wb.active
             
             content_summary = []
-            for r in range(4, min(ws.max_row + 1, 120)):
+            for r in range(4, min(ws.max_row + 1, 80)):
                 city = ws.cell(r, 2).value
                 schedule = ws.cell(r, 5).value
                 line_parts = []
@@ -167,7 +167,7 @@ def load_company_database():
                 if line_parts:
                     content_summary.append(" | ".join(line_parts))
             
-            extracted_knowledge.append(f"=== [사내 표준 파일: {filename}] ===\n" + "\n".join(content_summary[:80]))
+            extracted_knowledge.append(f"=== [사내 표준 파일: {filename}] ===\n" + "\n".join(content_summary[:50]))
         except Exception:
             continue
             
@@ -175,7 +175,6 @@ def load_company_database():
 
 db_files, db_context = load_company_database()
 
-# Gemini 클라이언트 초기화
 api_key = st.secrets.get("GEMINI_API_KEY")
 client = genai.Client(api_key=api_key) if api_key else None
 
@@ -216,7 +215,6 @@ with col1:
             placeholder="""1. 인천/이스탄불/아테네 (TK021 / TK1845 편) 20:45분 아테네 도착
 2. 아테네(관광) - 고린도(관광) - 아테네
 3. 아테네 / 이스탄불 (TK1844 12:50분 도착) 후 이스탄불 시내 관광
-4. 이스탄불 / 카파도키아 (TK2010 0735-0900) - 카파도키아 관광
 ..."""
         )
 
@@ -268,7 +266,7 @@ with col2:
         """
         ui_placeholder.markdown(html_content, unsafe_allow_html=True)
 
-    render_assistant_ui("idle", "선배님! 대한항공/아시아나 통합 룰 및 완판본 서식으로 준비 완료했습니다! ⌨️")
+    render_assistant_ui("idle", "초고속 터보 엔진 세팅 완료! 지연 없이 즉시 생성합니다. ⌨️")
 
     generate_btn = st.button("🚀 엑셀 일정표 생성하기", type="primary", use_container_width=True)
 
@@ -280,13 +278,13 @@ with col2:
         elif "[옵션 B]" in input_mode and not routing_text.strip():
             st.warning("루팅 정보를 입력해 주세요.")
         else:
-            render_assistant_ui("working", "사내 DB 매칭 및 통합 항공 스케줄/완판본 서식을 조립 중입니다! ⚡🔥")
+            render_assistant_ui("working", "초고속 Flash 엔진으로 엑셀 일정표를 빌드 중입니다! ⚡🔥")
             
-            with st.spinner("김똘망 사원이 완판본 규격대로 꼼꼼히 제작하고 있습니다..."):
+            with st.spinner("김똘망 사원이 초고속으로 제작하고 있습니다..."):
                 try:
                     system_prompt = f"""
 당신은 15년 차 유럽 전문 랜드사의 수석 오퍼레이터입니다.
-아래 제공된 [사내 표준 엑셀 DB] 및 사용자의 입력을 바탕으로 고객 전달용 완벽한 엑셀 일정표 JSON을 생성하세요.
+아래 제공된 [사내 표준 엑셀 DB] 및 사용자의 입력을 바탕으로 고객 전달용 완벽한 엑셀 일정표 JSON을 신속하게 생성하세요.
 
 [사내 표준 엑셀 DB]
 {db_context if db_context else "(표준 랜드사 규격 준수)"}
@@ -297,7 +295,7 @@ with col2:
 [핵심 절대 규칙 - 위반 절대 금지]
 1. 항공 루팅 및 대한항공/아시아나 통합 규칙:
    - 사용자가 대한항공(KE) 또는 국적기를 요청한 경우:
-     * 참조하는 사내 DB 파일이 아시아나(OZ) 베이스이거나 구형 스케줄이더라도, 항공편명(KE)과 시간표를 현재 대한항공 운항 스케줄 기준으로 보정하여 출력하세요.
+     * 참조하는 사내 DB 파일이 아시아나(OZ) 베이스이더라도 편명(KE)과 시간표를 현재 대한항공 운항 스케줄 기준으로 보정하여 출력하세요.
      * 아시아나 편명(OZ)은 결과표에 절대 표기하지 마세요.
    - 터키항공(TK) 요청 시 경유 4행 규격 준수:
      * 행1: city="인  천", transport="TK021", time="10:45", schedule="인천 국제공항 출발 / 이스탄불 공항 향발"
@@ -308,16 +306,12 @@ with col2:
    - 마지막 날(인천 도착일): city="인  천", schedule="인천 국제공항 도착 후 해산", hotel="".
 
 2. 일정 흐름 및 세모표(▶) 직행 규칙:
-   - '~로 이동' 행 바로 다음에 쓸데없이 '[도시명] 관광' 같은 빈 껍데기 행을 절대 넣지 마세요!
+   - '~로 이동' 행 바로 다음에 쓸데없이 '[도시명] 관광' 같은 빈 행을 절대 넣지 마세요!
    - 이동 행 바로 다음 행부터 곧바로 ' ▶ [설명] **[핵심명소]**' 형태로 작성하세요.
 
 3. 관광 명소 서식 표기 규칙 (부분 볼드 처리):
    - 설명 부분은 보통체로, 맨 뒤의 핵심 관광지 명칭만 **기호로 감싸세요!
-   - 대괄호([])는 절대로 사용하지 마세요.
-   (작성 예시):
-   - schedule=" ▶ 세계 3대 운하 중 하나인 **고린도 운하**"
-   - schedule=" ▶ 수천 년 전 화산재가 굳어져 형성된 기암괴석의 전시장 **괴레메 야외 박물관**"
-   - schedule=" ▶ 서양 문명의 정수이자 유네스코 세계문화유산인 **파르테논 신전**"
+   (예: schedule=" ▶ 세계 3대 운하 중 하나인 **고린도 운하**")
 
 4. 도시명(city) 배치 원칙:
    - 일자 첫 행에 시작 도시를 적습니다.
@@ -363,29 +357,35 @@ with col2:
                         }
                     }
 
-                    candidate_models = ['gemini-2.5-pro', 'gemini-3.5-flash-lite']
+                    # ★ 지연 없는 초고속 Flash 엔진 라인업으로 즉시 변경
+                    candidate_models = ['gemini-2.5-flash', 'gemini-1.5-flash']
                     response = None
                     last_error = None
 
                     for model_name in candidate_models:
                         try:
+                            # 2.5-flash의 불필요한 장시간 추론(Thinking)을 0으로 차단하여 3~5초 내 즉답 강제
+                            cfg_dict = {
+                                "response_mime_type": "application/json",
+                                "response_schema": json_schema
+                            }
+                            if "2.5" in model_name:
+                                cfg_dict["thinking_config"] = types.ThinkingConfig(thinking_budget=0)
+
                             response = client.models.generate_content(
                                 model=model_name,
                                 contents=system_prompt,
-                                config=types.GenerateContentConfig(
-                                    response_mime_type="application/json",
-                                    response_schema=json_schema
-                                )
+                                config=types.GenerateContentConfig(**cfg_dict)
                             )
                             if response and response.text:
                                 break
                         except Exception as e:
                             last_error = e
-                            time.sleep(1.2)
+                            time.sleep(1.0)
                             continue
 
                     if not response or not response.text:
-                        raise Exception(f"일시적인 AI 서버 지연이 발생했습니다: {last_error}")
+                        raise Exception(f"API 호출 지연: {last_error}")
 
                     raw_text = response.text.strip()
                     if "```" in raw_text:
@@ -427,7 +427,6 @@ with col2:
                         d_num = item["day"]
                         rows = item["rows"]
                         
-                        # (1) 불필요한 '[도시] 관광' 행 제거
                         cleaned_rows = []
                         for r in rows:
                             sc = str(r.get("schedule") or "").strip()
@@ -437,7 +436,6 @@ with col2:
                         rows = cleaned_rows
                         item["rows"] = rows
 
-                        # (2) 조식 단독 행 분리
                         if d_num > 1 and len(rows) > 0 and d_num != total_days_cnt:
                             first_sc = rows[0].get("schedule", "")
                             if "조식" in first_sc and len(first_sc) > 8:
@@ -447,7 +445,6 @@ with col2:
                                 rows[0]["schedule"] = "호텔 조식 후"
                                 rows.insert(1, {"city": "", "transport": "", "time": "", "schedule": remainder})
 
-                        # (3) 1일차 터키항공(TK) 경유 4단 규격 강제 보정 (사용자 요청이 TK인 경우)
                         req_text = (quick_prompt if "[옵션 A]" in input_mode else routing_text).upper()
                         if d_num == 1 and ("TK" in req_text or "터키항공" in req_text):
                             rows = [
@@ -462,7 +459,6 @@ with col2:
                             item["meals"] = ["기내식", "기내식", "-"]
                             item["hotel"] = "HOTEL : ANY 4* HOTEL CLASS"
 
-                        # (4) 도시 중복 제거
                         if d_num > 1:
                             last_city = None
                             for r in rows:
@@ -473,7 +469,6 @@ with col2:
                                     else:
                                         last_city = curr_c
 
-                        # (5) 시간 및 전용차량 정돈
                         bus_placed = False
                         for r in rows:
                             tm = str(r.get("time") or "").strip()
@@ -495,7 +490,6 @@ with col2:
                                     if r.get("time") == "전  일":
                                         r["time"] = ""
 
-                        # (6) 식사 4종 규격화
                         cleaned_meals = []
                         for m in item.get("meals", []):
                             m_str = str(m or "").strip()
@@ -517,7 +511,6 @@ with col2:
                             cleaned_meals.append("-")
                         item["meals"] = cleaned_meals[:3]
 
-                        # (7) 귀국일(마지막 전날) 및 마지막 날 고정
                         if d_num == total_days_cnt - 1:
                             item["rows"] = [r for r in rows if "인천 도착" not in r.get("schedule", "")]
                             has_night_flight = any("기내 숙박" in r.get("schedule", "") for r in item["rows"])
@@ -553,7 +546,6 @@ with col2:
                     font_bold = Font(name="맑은 고딕", size=9, bold=True)
                     font_notice_red = Font(name="맑은 고딕", size=11, bold=True, color="FF0000")
                     
-                    # In-line 부분 서식을 위한 전용 폰트
                     in_font_regular = InlineFont(rFont="맑은 고딕", sz=9.0, b=False)
                     in_font_bold = InlineFont(rFont="맑은 고딕", sz=9.0, b=True)
                     
@@ -566,7 +558,6 @@ with col2:
                     thin_side = Side(style="thin", color="000000")
                     med_side = Side(style="medium", color="000000")
                     
-                    # 1행 타이틀바
                     full_title = tour_title.strip() if tour_title.strip() else f"{start_date.strftime('%Y-%m-%d')} 유럽투어 일정표"
                     ws.row_dimensions[1].height = 28.0
                     ws.cell(1, 1, full_title).font = font_title
@@ -578,10 +569,8 @@ with col2:
                         cell.border = Border(top=med_side, bottom=med_side, left=med_side if c==1 else None, right=med_side if c==7 else None)
                     ws.merge_cells("A1:G1")
                     
-                    # 2행 간격행
                     ws.row_dimensions[2].height = 13.0
                     
-                    # 3행 헤더행
                     headers = ["날짜", "도시", "교통편", "시간", "일정", "식사", ""]
                     ws.row_dimensions[3].height = 22.0
                     for c in range(1, 8):
@@ -635,7 +624,6 @@ with col2:
                                     cell.fill = fill_hotel
                                 cell.border = Border(top=b_top, bottom=b_bottom, left=b_left, right=b_right)
                         
-                        # 1열 날짜/요일 기입
                         cell_d1 = ws.cell(cur_row, 1, day_str)
                         cell_d1.font = font_bold
                         cell_d1.alignment = align_center
@@ -648,7 +636,6 @@ with col2:
                         cell_d3.font = font_body
                         cell_d3.alignment = align_center
                         
-                        # 2~5열 일정
                         for idx, r_data in enumerate(rows_data):
                             r = cur_row + idx
                             sc_text = str(r_data.get("schedule") or "")
@@ -666,7 +653,6 @@ with col2:
                             cell_sc = ws.cell(r, 5)
                             cell_sc.alignment = align_mid_left
                             
-                            # 관광 명소 앞부분 일반체, 뒤의 명소명만 볼드체 렌더링
                             if sc_text.strip().startswith("▶"):
                                 bold_match = re.search(r"^(.*?)\*\*(.+?)\*\*(.*)$", sc_text)
                                 if bold_match:
@@ -697,14 +683,12 @@ with col2:
                                 cell_sc.value = sc_text
                                 cell_sc.font = font_body
                         
-                        # 호텔
                         if has_hotel:
                             h_row = cur_row + total_rows - 1
                             h_cell = ws.cell(h_row, 5, hotel_str)
                             h_cell.font = font_bold
                             h_cell.alignment = align_mid_left
                         
-                        # 식사
                         meal_labels = ["조", "중", "석"]
                         for m_idx in range(3):
                             ws.cell(cur_row + m_idx, 6, meal_labels[m_idx]).alignment = align_center
@@ -713,7 +697,6 @@ with col2:
                         
                         cur_row += total_rows
                     
-                    # 최하단 안내 문구: 한 줄 띄고 11pt 붉은색 볼드 가운데 정렬
                     notice_row = cur_row + 1
                     ws.row_dimensions[notice_row].height = 22.0
                     notice_cell = ws.cell(notice_row, 1, "* 상기 일정은 현지 사정에 따라 변경될 수 있습니다 *")
@@ -725,7 +708,7 @@ with col2:
                     wb.save(output)
                     output.seek(0)
                     
-                    render_assistant_ui("success", "선배님! 요청하신 통합 항공 스케줄과 완판본 서식으로 엑셀 제작을 완료했습니다! 🙇‍♂️✨")
+                    render_assistant_ui("success", "선배님! 초고속 Flash 엔진으로 막힘없이 생성을 마쳤습니다! 🙇‍♂️✨")
                     
                     final_title = tour_title.strip() if tour_title.strip() else "유럽투어"
                     file_name = f"{start_date.strftime('%Y-%m-%d')} {final_title} - 일정표.xlsx"
@@ -741,3 +724,4 @@ with col2:
                 except Exception as e:
                     render_assistant_ui("working", f"오류가 발생했습니다: {str(e)}")
                     st.error(f"오류 상세: {str(e)}")
+                    
