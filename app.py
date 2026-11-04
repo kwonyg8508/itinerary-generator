@@ -1,6 +1,8 @@
 import streamlit as st
 import openpyxl
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+from openpyxl.cell.rich_text import CellRichText, TextBlock
+from openpyxl.cell.text import InlineFont
 from openpyxl.utils import get_column_letter
 from datetime import datetime, timedelta
 import io
@@ -135,7 +137,7 @@ html, body, [class*="css"] {
 """, unsafe_allow_html=True)
 
 st.title("🇪🇺 유럽 일정표 자동 생성 시스템 (Master Edition)")
-st.caption("실무 완판 규격: 풍성한 명소 설명 복원, 이동 직후 세모표 직행, 도시 중복 제거 완료")
+st.caption("실무 완판 규격: 관광지 설명은 일반체, 핵심 명소명만 정밀 볼드 서식 적용 완료")
 
 # 3. database 폴더 내 사내 엑셀 DB 자동 스캔
 @st.cache_data(show_spinner=False)
@@ -266,7 +268,7 @@ with col2:
         """
         ui_placeholder.markdown(html_content, unsafe_allow_html=True)
 
-    render_assistant_ui("idle", "선배님! 불필요한 중간 행 싹 빼고 명소 설명 꽉 채워 대기 중입니다! ⌨️")
+    render_assistant_ui("idle", "선배님! 핵심 명소만 쏙 골라 볼드 처리할 준비 완료했습니다! ⌨️")
 
     generate_btn = st.button("🚀 엑셀 일정표 생성하기", type="primary", use_container_width=True)
 
@@ -278,7 +280,7 @@ with col2:
         elif "[옵션 B]" in input_mode and not routing_text.strip():
             st.warning("루팅 정보를 입력해 주세요.")
         else:
-            render_assistant_ui("working", "명소 상세 설명 복원 및 도시/행 간격 최적화 중입니다! 🏛️⚡🔥")
+            render_assistant_ui("working", "명소 부분 볼드체 렌더링 및 규격 조립 중입니다! 🏛️⚡🔥")
             
             with st.spinner("김똘망 사원이 완판본 규격대로 오차 없이 조립하고 있습니다..."):
                 try:
@@ -304,16 +306,16 @@ with col2:
 
 2. 일정 흐름 및 세모표(▶) 직행 규칙:
    - '~로 이동' 행 바로 다음에 쓸데없이 '[도시명] 관광' 같은 빈 껍데기 행을 절대 넣지 마세요!
-   - 이동 행 바로 다음 행부터 곧바로 ' ▶ [상세한 수식어/설명] [핵심명소]' 세모표 행이 나오게 하세요.
-     (좋은 예시):
-     행: city="", schedule="아테네로 이동"
-     행: city="아테네", schedule=" ▶ 서양 문명의 정수이자 유네스코 세계문화유산 파르테논 신전"
-     행: city="", schedule=" ▶ 승리의 여신 에레크테이온 신전 및 카리아티드 석주 조망"
-     행: city="", schedule=" ▶ 최초의 근대 올림픽 경기장 파나티나이코 조망"
+   - 이동 행 바로 다음 행부터 곧바로 ' ▶ [설명] **[핵심명소]**' 형태로 작성하세요.
 
-3. 명소(schedule) 상세 설명 원칙:
-   - 명소 이름만 달랑 적지 마세요! 반드시 그 명소의 특징, 역사, 수식어를 풍성하게 함께 작성하세요.
+3. ★명소 서식 표기 핵심 규칙 (부분 볼드 처리):
+   - 설명 부분은 보통체로, 맨 뒤의 핵심 관광지 명칭만 **기호로 감싸세요!
    - 대괄호([])는 절대로 사용하지 마세요.
+   (작성 예시):
+   - schedule=" ▶ 세계 3대 운하 중 하나인 **고린도 운하**"
+   - schedule=" ▶ 아폴론 신전과 고대 유적지가 보존된 **고린도 유적지**"
+   - schedule=" ▶ 서양 문명의 정수이자 유네스코 세계문화유산인 **파르테논 신전**"
+   - schedule=" ▶ 수천 년 전 화산재가 굳어져 형성된 기암괴석의 전시장 **괴레메 야외 박물관**"
 
 4. 도시명(city) 배치 원칙:
    - 일자 첫 행에 시작 도시를 적습니다.
@@ -413,7 +415,7 @@ with col2:
 
                     parsed_days = [day_dict[k] for k in sorted(day_dict.keys())]
 
-                    # 2. 강력한 실무 파이썬 후처리 (불필요한 관광행 삭제, 도시 중복 제거, 1일차/8일차 규격화)
+                    # 2. 강력한 실무 파이썬 후처리
                     valid_meals = ["호텔식", "현지식", "한   식", "중국식", "기내식", "-"]
                     turkey_keywords = ["이스탄불", "카파도키아", "파묵칼레", "마니사", "쉬린제", "에페소", "터키", "튀르키예", "카이세리", "네브셰히르", "안탈리아", "안탈라", "아피온", "콘야", "이즈미르"]
 
@@ -423,11 +425,10 @@ with col2:
                         d_num = item["day"]
                         rows = item["rows"]
                         
-                        # (1) 불필요한 '[도시] 관광' 빈 껍데기 행 제거 (이동 후 바로 세모표 직행)
+                        # (1) 불필요한 '[도시] 관광' 행 제거
                         cleaned_rows = []
                         for r in rows:
                             sc = str(r.get("schedule") or "").strip()
-                            # '아테네 관광', '이스탄불 시내 관광' 등 세모표 없는 단순 관광 행 제거 (단, 이동/조식/항공/휴식 행은 유지)
                             if re.match(r"^[가-힣a-zA-Z\s]+관광$", sc) and not sc.startswith("▶"):
                                 continue
                             cleaned_rows.append(r)
@@ -458,7 +459,7 @@ with col2:
                             item["meals"] = ["기내식", "기내식", "-"]
                             item["hotel"] = "HOTEL : ANY 4* HOTEL CLASS"
 
-                        # (4) 도시 중복 제거 (같은 도시가 연속해서 행에 나오면 빈칸 처리)
+                        # (4) 도시 중복 제거
                         if d_num > 1:
                             last_city = None
                             for r in rows:
@@ -552,6 +553,10 @@ with col2:
                     font_body = Font(name="맑은 고딕", size=9)
                     font_bold = Font(name="맑은 고딕", size=9, bold=True)
                     font_notice_red = Font(name="맑은 고딕", size=11, bold=True, color="FF0000")
+                    
+                    # In-line 부분 서식을 위한 전용 폰트
+                    in_font_regular = InlineFont(rFont="맑은 고딕", sz=9.0, b=False)
+                    in_font_bold = InlineFont(rFont="맑은 고딕", sz=9.0, b=True)
                     
                     fill_title = PatternFill(start_color="FFFFCC", end_color="FFFFCC", fill_type="solid")
                     fill_hotel = PatternFill(start_color="EFEFEF", end_color="EFEFEF", fill_type="solid")
@@ -659,13 +664,39 @@ with col2:
                                 cell_tm = ws.cell(r, 4, str(r_data.get("time") or ""))
                                 cell_tm.alignment = align_center
                                 
-                            cell_sc = ws.cell(r, 5, sc_text)
+                            cell_sc = ws.cell(r, 5)
                             cell_sc.alignment = align_mid_left
                             
-                            # 관광 명소(▶) 볼드체 적용
+                            # ★ 핵심: 관광 명소 앞부분은 일반체, 뒤의 명소명만 볼드체 렌더링
                             if sc_text.strip().startswith("▶"):
-                                cell_sc.font = font_bold
+                                bold_match = re.search(r"^(.*?)\*\*(.+?)\*\*(.*)$", sc_text)
+                                if bold_match:
+                                    prefix_text = bold_match.group(1)
+                                    bold_target = bold_match.group(2)
+                                    suffix_text = bold_match.group(3)
+                                    
+                                    rich_text_elements = []
+                                    if prefix_text:
+                                        rich_text_elements.append(TextBlock(in_font_regular, prefix_text))
+                                    if bold_target:
+                                        rich_text_elements.append(TextBlock(in_font_bold, bold_target))
+                                    if suffix_text:
+                                        rich_text_elements.append(TextBlock(in_font_regular, suffix_text))
+                                    
+                                    cell_sc.value = CellRichText(rich_text_elements)
+                                else:
+                                    # ** 마크다운이 안 붙었을 경우: 마지막 단어(명소명)만 분리하여 볼드 적용
+                                    parts = sc_text.rsplit(" ", 1)
+                                    if len(parts) == 2:
+                                        cell_sc.value = CellRichText([
+                                            TextBlock(in_font_regular, parts[0] + " "),
+                                            TextBlock(in_font_bold, parts[1])
+                                        ])
+                                    else:
+                                        cell_sc.value = sc_text
+                                        cell_sc.font = font_body
                             else:
+                                cell_sc.value = sc_text
                                 cell_sc.font = font_body
                         
                         # 호텔
@@ -696,7 +727,7 @@ with col2:
                     wb.save(output)
                     output.seek(0)
                     
-                    render_assistant_ui("success", "선배님! 풍성한 설명 복원, 이동 후 세모표 직행, 도시 중복 제거까지 완벽 조정했습니다! 🙇‍♂️✨")
+                    render_assistant_ui("success", "선배님! 설명은 보통 글씨로, 최종 관광지명만 굵은 글씨로 정밀 분리 렌더링했습니다! 🙇‍♂️✨")
                     
                     final_title = tour_title.strip() if tour_title.strip() else "유럽투어"
                     file_name = f"{start_date.strftime('%Y-%m-%d')} {final_title} - 일정표.xlsx"
