@@ -18,7 +18,17 @@ from google.genai import types
 # 1. 페이지 설정
 st.set_page_config(page_title="유럽 랜드사 일정표 생성기 (Master Edition)", layout="wide", page_icon="🇪🇺")
 
-# 2. 커스텀 CSS
+# 2. 세션 상태(Session State) 초기화
+if "generated_file" not in st.session_state:
+    st.session_state.generated_file = None
+if "generated_filename" not in st.session_state:
+    st.session_state.generated_filename = None
+if "ui_status" not in st.session_state:
+    st.session_state.ui_status = "idle"
+if "ui_msg" not in st.session_state:
+    st.session_state.ui_msg = "선배님! 초고속 Flash 엔진 세팅 완료되었습니다. 요청해 주세요! ☕"
+
+# 3. 커스텀 CSS
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Pretendard:wght@400;600;700&display=swap');
@@ -137,9 +147,9 @@ html, body, [class*="css"] {
 """, unsafe_allow_html=True)
 
 st.title("🇪🇺 유럽 일정표 자동 생성 시스템 (Master Edition)")
-st.caption("실무 완판 규격: 초고속 Flash 엔진 탑재, 아시아나/대한항공 통합, 명소 볼드 분리 완료")
+st.caption("실무 완판 규격: 세션 락업 방지, 아시아나/대한항공 통합, 명소 부분 볼드 적용 완료")
 
-# 3. database 폴더 내 사내 엑셀 DB 자동 스캔
+# 4. database 폴더 내 사내 엑셀 DB 자동 스캔
 @st.cache_data(show_spinner=False)
 def load_company_database():
     db_folder = "database"
@@ -167,7 +177,7 @@ def load_company_database():
                 if line_parts:
                     content_summary.append(" | ".join(line_parts))
             
-            extracted_knowledge.append(f"=== [사내 표준 파일: {filename}] ===\n" + "\n".join(content_summary[:50]))
+            extracted_knowledge.append(f"=== [사내 표준 파일: {filename}] ===\n" + "\n".join(content_summary[:40]))
         except Exception:
             continue
             
@@ -222,7 +232,7 @@ with col2:
     st.subheader("2. AI 수배팀 작업 현황")
     ui_placeholder = st.empty()
 
-    def render_assistant_ui(status="working", message="선배님, 요청 주시면 사내 규격 엑셀 바로 뽑아오겠습니다! ☕"):
+    def render_assistant_ui(status="idle", message="선배님, 요청해 주시면 즉각 빌드하겠습니다! ☕"):
         if status == "success":
             badge_text = "🎉 제작 완료!"
             badge_class = "badge-success"
@@ -266,7 +276,8 @@ with col2:
         """
         ui_placeholder.markdown(html_content, unsafe_allow_html=True)
 
-    render_assistant_ui("idle", "초고속 터보 엔진 세팅 완료! 지연 없이 즉시 생성합니다. ⌨️")
+    # 저장된 세션 상태로 UI 표시
+    render_assistant_ui(st.session_state.ui_status, st.session_state.ui_msg)
 
     generate_btn = st.button("🚀 엑셀 일정표 생성하기", type="primary", use_container_width=True)
 
@@ -278,9 +289,10 @@ with col2:
         elif "[옵션 B]" in input_mode and not routing_text.strip():
             st.warning("루팅 정보를 입력해 주세요.")
         else:
-            render_assistant_ui("working", "초고속 Flash 엔진으로 엑셀 일정표를 빌드 중입니다! ⚡🔥")
+            st.session_state.generated_file = None  # 이전 파일 초기화
+            render_assistant_ui("working", "초고속 엔진으로 엑셀 일정표를 빌드 중입니다! ⚡🔥")
             
-            with st.spinner("김똘망 사원이 초고속으로 제작하고 있습니다..."):
+            with st.spinner("김똘망 사원이 정밀 조립하고 있습니다..."):
                 try:
                     system_prompt = f"""
 당신은 15년 차 유럽 전문 랜드사의 수석 오퍼레이터입니다.
@@ -357,14 +369,12 @@ with col2:
                         }
                     }
 
-                    # ★ 지연 없는 초고속 Flash 엔진 라인업으로 즉시 변경
                     candidate_models = ['gemini-2.5-flash', 'gemini-1.5-flash']
                     response = None
                     last_error = None
 
                     for model_name in candidate_models:
                         try:
-                            # 2.5-flash의 불필요한 장시간 추론(Thinking)을 0으로 차단하여 3~5초 내 즉답 강제
                             cfg_dict = {
                                 "response_mime_type": "application/json",
                                 "response_schema": json_schema
@@ -706,22 +716,30 @@ with col2:
                     
                     output = io.BytesIO()
                     wb.save(output)
-                    output.seek(0)
-                    
-                    render_assistant_ui("success", "선배님! 초고속 Flash 엔진으로 막힘없이 생성을 마쳤습니다! 🙇‍♂️✨")
                     
                     final_title = tour_title.strip() if tour_title.strip() else "유럽투어"
                     file_name = f"{start_date.strftime('%Y-%m-%d')} {final_title} - 일정표.xlsx"
                     
-                    st.download_button(
-                        label="📥 완성된 실무 마스터 엑셀 일정표 다운로드",
-                        data=output,
-                        file_name=file_name,
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                        type="primary",
-                        use_container_width=True
-                    )
+                    # 세션 상태에 생성된 파일 저장 (재실행 루프 방지)
+                    st.session_state.generated_file = output.getvalue()
+                    st.session_state.generated_filename = file_name
+                    st.session_state.ui_status = "success"
+                    st.session_state.ui_msg = "선배님! 요청하신 일정표 생성을 마쳤습니다! 다운로드해 주세요! 🙇‍♂️✨"
+                    st.rerun()
+
                 except Exception as e:
-                    render_assistant_ui("working", f"오류가 발생했습니다: {str(e)}")
+                    st.session_state.ui_status = "working"
+                    st.session_state.ui_msg = f"오류가 발생했습니다: {str(e)}"
                     st.error(f"오류 상세: {str(e)}")
-                    
+
+    # 파일이 생성되어 메모리에 보관되어 있으면 항상 고정 렌더링
+    if st.session_state.generated_file:
+        st.success("✅ 파일 준비 완료!")
+        st.download_button(
+            label="📥 완성된 실무 마스터 엑셀 일정표 다운로드",
+            data=st.session_state.generated_file,
+            file_name=st.session_state.generated_filename,
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            type="primary",
+            use_container_width=True
+        )
