@@ -312,7 +312,7 @@ with col2:
 1. 항공 스케줄(편명/시간/경유) 원본 100% 보존 및 매핑:
    - 텍스트에 명시된 항공 편명(예: TK021, TK1845, TK1844, TK2010, TK020)은 반드시 해당 항공 이동 행의 transport 칸에 기재하세요.
    - 시간(time) 칸에는 사용자가 텍스트에 직접 기재한 '실제 시각(예: 20:45, 12:50, 07:35, 09:00, 17:05, 08:55)'만 정확히 적으세요.
-   - **'오전', '오후', '저녁', '늦은 오후' 같은 모호한 단어는 time 칸에 절대 넣지 마세요 (무조건 빈칸("") 처리).**
+   - '오전', '오후', '저녁', '늦은 오후' 같은 모호한 단어는 time 칸에 절대 넣지 마세요 (무조건 빈칸("") 처리).
    - 1일차 경유편의 경우:
      * 행1: city="인천", transport="", time="", schedule="인천 국제공항 집결 후 출국 수속"
      * 행2: city="", transport="TK021", time="", schedule="인천 출발 / 이스탄불 향발 (비행시간 약 11시간 30분)"
@@ -322,8 +322,8 @@ with col2:
      * 행6: city="", transport="", time="", schedule="호텔 투숙 및 휴식"
 
 2. 교통편('전용차량') 및 시간('전  일') 표기 엄격 제한:
-   - **전일 육로 관광일의 경우: 오직 그 날의 2번째 행(조식 후 첫 이동/관광 시작 행)에만 단 1회 transport="전용차량", time="전  일"을 적습니다.**
-   - 같은 날 오후, 저녁 이동 행에 transport="전용차량"을 중복으로 적거나 time에 '오후', '저녁'을 적는 행위를 엄격히 금지합니다 (무조건 빈칸("")).
+   - 전일 육로 관광일의 경우: 오직 그 날의 2번째 행(조식 후 첫 이동/관광 시작 행)에만 단 1회 transport="전용차량", time="전  일"을 적습니다.
+   - 같은 날 다른 행에 transport="전용차량"을 중복으로 적거나 time에 '오후', '저녁'을 적는 행위를 금지합니다 (무조건 빈칸("")).
 
 3. 도시별 지리적 정확성 및 명소 풍성도 (각 도시마다 최소 3~5개 명소 필수):
    - 각 도시/지역마다 대표 유료/무료 명소를 ' ▶ ~한 [명소명](내부/외관/조망)' 형식으로 풍성하게 개별 행으로 작성하세요.
@@ -335,8 +335,8 @@ with col2:
    - 파묵칼레/에페소/쉬린제 명소 기준: 파묵칼레 석회붕 및 히에라폴리스, 에페소 켈수스 도서관, 원형 대극장, 하드리아누스 신전, 쉬린제 마을 등.
 
 4. 마지막 날 인천 도착 규격:
-   - 제09일 인천 도착 행: city="인천", transport="", time="08:55", schedule="인천 국제공항 도착 후 해산"
-   - **인천 도착 행 이후에 '자택 휴식', '귀가' 등의 추가 행을 절대 만들지 마세요.** hotel도 빈칸("")으로 비워둡니다.
+   - 마지막 날은 1개 행으로 작성: city="인천", transport="", time="08:55", schedule="인천 국제공항 도착 후 해산"
+   - 인천 도착 행 이후에 '자택 휴식', '귀가' 등의 추가 행을 절대 만들지 마세요. hotel은 빈칸("") 처리.
 
 [출력 포맷: 순수 JSON 배열만 출력]
 """
@@ -409,20 +409,30 @@ with col2:
                     
                     days_korean = ["월요일", "화요일", "수요일", "목요일", "금요일", "토요일", "일요일"]
                     cur_row = 4
+                    total_days_count = len(parsed_days)
                     
-                    for item in parsed_days:
-                        day_num = item.get("day", 1)
+                    for item_idx, item in enumerate(parsed_days):
+                        day_num = item.get("day", item_idx + 1)
                         curr_date = start_date + timedelta(days=day_num - 1)
                         day_str = f"제{day_num:02d}일"
                         date_str = curr_date.strftime("%m월 %d일")
                         weekday_str = days_korean[curr_date.weekday()]
                         
                         rows_data = item.get("rows", [])
-                        hotel_str = item.get("hotel", "")
+                        if not isinstance(rows_data, list):
+                            rows_data = []
+                            
+                        hotel_str = str(item.get("hotel") or "").strip()
                         meals = item.get("meals", ["-", "-", "-"])
+                        if not isinstance(meals, list):
+                            meals = ["-", "-", "-"]
                         
-                        # 마지막 날 인천 도착 시 호텔칸 제외
-                        has_hotel = bool(hotel_str.strip()) and not ("인천" in str(rows_data[0].get("city", "")) and "도착" in str(rows_data[0].get("schedule", "")))
+                        # 안전한 마지막 날 호텔 판별 (인덱스 에러 방지)
+                        is_last_day = (item_idx == total_days_count - 1)
+                        first_row_text = str(rows_data[0].get("schedule", "")) if len(rows_data) > 0 else ""
+                        is_incheon_arrival = "인천" in first_row_text and "도착" in first_row_text
+                        
+                        has_hotel = bool(hotel_str) and not is_last_day and not is_incheon_arrival
                         total_rows = max(len(rows_data), 3) + (1 if has_hotel else 0)
                         
                         for r_idx in range(total_rows):
@@ -471,15 +481,16 @@ with col2:
                             h_cell.font = font_bold
                             h_cell.alignment = align_mid_left
                         
-                        # 식사
+                        # 식사 (안전하게 인덱싱)
                         meal_labels = ["조", "중", "석"]
                         for m_idx in range(3):
                             ws.cell(cur_row + m_idx, 6, meal_labels[m_idx]).alignment = align_center
-                            ws.cell(cur_row + m_idx, 7, meals[m_idx] if m_idx < len(meals) else "-").alignment = align_center
+                            meal_val = meals[m_idx] if m_idx < len(meals) else "-"
+                            ws.cell(cur_row + m_idx, 7, meal_val).alignment = align_center
                         
                         cur_row += total_rows
                     
-                    # 최하단 안내 문구 추가 (한 줄 띄고 가운데 정렬)
+                    # 최하단 안내 문구 추가
                     notice_row = cur_row + 1
                     ws.row_dimensions[notice_row].height = 20.0
                     notice_cell = ws.cell(notice_row, 1, "* 상기 일정은 현지 사정에 따라 변경될 수 있습니다 *")
@@ -505,5 +516,5 @@ with col2:
                         use_container_width=True
                     )
                 except Exception as e:
-                    render_assistant_ui("working", f"헉 선배님 오류가 났습니다 ㅠㅠ: {str(e)}")
+                    render_assistant_ui("working", f"오류가 발생했습니다: {str(e)}")
                     st.error(f"오류 상세: {str(e)}")
