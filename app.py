@@ -26,7 +26,7 @@ if "generated_filename" not in st.session_state:
 if "ui_status" not in st.session_state:
     st.session_state.ui_status = "idle"
 if "ui_msg" not in st.session_state:
-    st.session_state.ui_msg = "선배님! 503 에러 원천 차단 Flash 고속 엔진 세팅 완료되었습니다. 요청해 주세요! ☕"
+    st.session_state.ui_msg = "선배님! 20줄 초경량 스마트 DB 엔진 세팅 완료되었습니다. 요청해 주세요! ☕"
 
 # 3. 커스텀 CSS
 st.markdown("""
@@ -147,15 +147,16 @@ html, body, [class*="css"] {
 """, unsafe_allow_html=True)
 
 st.title("🇪🇺 유럽 일정표 자동 생성 시스템 (Master Edition)")
-st.caption("실무 완판 규격: 503 방지 단독 엔진, 스마트 DB 매칭, 부분 볼드 적용 완료")
+st.caption("실무 완판 규격: 사내 DB 20줄 초경량화, 503 완전 방지, 명소 부분 볼드 적용 완료")
 
-# 4. database 폴더 내 사내 엑셀 DB 파일 목록 스캔
+# 4. database 폴더 내 사내 엑셀 DB 목록 스캔
 def get_available_db_files():
     db_folder = "database"
     if not os.path.exists(db_folder):
         return []
     return [os.path.basename(f) for f in glob.glob(os.path.join(db_folder, "*.xlsx"))]
 
+# 사내 엑셀에서 핵심 명소 및 도시만 20줄 이내로 추출하는 초경량 스마트 필터
 def get_target_db_context(user_query: str):
     db_folder = "database"
     excel_files = glob.glob(os.path.join(db_folder, "*.xlsx"))
@@ -196,22 +197,26 @@ def get_target_db_context(user_query: str):
 
     matched_filename = os.path.basename(best_file)
 
+    # 핵심 명소(▶) 및 주요 도시만 20줄 이내로 추출하여 프롬프트 다이어트
     try:
         wb = openpyxl.load_workbook(best_file, data_only=True)
         ws = wb.active
         content_summary = []
+        
         for r in range(4, min(ws.max_row + 1, 90)):
             city = ws.cell(r, 2).value
-            schedule = ws.cell(r, 5).value
-            line_parts = []
-            if city:
-                line_parts.append(f"도시: {str(city).strip()}")
-            if schedule:
-                line_parts.append(f"내용: {str(schedule).strip()}")
-            if line_parts:
-                content_summary.append(" | ".join(line_parts))
+            schedule = str(ws.cell(r, 5).value or "").strip()
+            
+            # 단순 이동, 식사, 호텔 행은 걸러내고 핵심 명소(▶) 및 주요 도시 위주로만 수집
+            if schedule.startswith("▶") or (city and len(str(city).strip()) > 1):
+                clean_sc = schedule.replace("\n", " ")[:60]
+                line = f"도시: {str(city).strip()} | {clean_sc}" if city else f"{clean_sc}"
+                content_summary.append(line)
+                
+            if len(content_summary) >= 20:
+                break
 
-        extracted = f"=== [선택된 사내 기준 엑셀: {matched_filename}] ===\n" + "\n".join(content_summary[:50])
+        extracted = f"=== [사내 표준 핵심 동선(20줄 압축): {matched_filename}] ===\n" + "\n".join(content_summary)
         return matched_filename, extracted
     except Exception:
         return matched_filename, ""
@@ -238,7 +243,7 @@ with col1:
             <div class="db-info-box">
                 📚 <b>연동 대기 사내 엑셀 DB ({len(db_file_list)}개):</b><br>
                 {' • '.join([f'`{f}`' for f in db_file_list])}<br>
-                <span style="font-size:11.5px; color:#2563eb;">* 요청에 맞춰 단 1개의 사내 엑셀만 선별되어 가볍게 전송됩니다.</span>
+                <span style="font-size:11.5px; color:#2563eb;">* 요청에 맞춰 단 1개 엑셀의 핵심 20행만 초경량 전송되어 503 에러를 차단합니다.</span>
             </div>
             """, unsafe_allow_html=True)
         else:
@@ -327,16 +332,16 @@ with col2:
             user_input_text = quick_prompt if "[옵션 A]" in input_mode else routing_text
             matched_file_name, target_db_context = get_target_db_context(user_input_text)
             
-            msg = f"'{matched_file_name}' 기준서를 매칭하여 503 지연 없이 즉시 조립합니다! ⚡" if matched_file_name else "사내 규격에 맞춰 조립 중입니다! ⚡"
+            msg = f"'{matched_file_name}' 20줄 핵심 동선을 매칭하여 503 없이 즉시 조립합니다! ⚡" if matched_file_name else "사내 규격에 맞춰 조립 중입니다! ⚡"
             render_assistant_ui("working", msg)
             
             with st.spinner("김똘망 사원이 일정표를 신속하게 제작하고 있습니다..."):
                 try:
                     system_prompt = f"""
 당신은 15년 차 유럽 전문 랜드사의 수석 오퍼레이터입니다.
-아래 제공된 [선택된 사내 기준 엑셀 DB] 및 사용자의 입력을 바탕으로 고객 전달용 완벽한 엑셀 일정표 JSON을 생성하세요.
+아래 제공된 [선택된 사내 기준 핵심 동선] 및 사용자의 입력을 바탕으로 고객 전달용 완벽한 엑셀 일정표 JSON을 생성하세요.
 
-[선택된 사내 기준 엑셀 DB]
+[선택된 사내 기준 핵심 동선]
 {target_db_context if target_db_context else "(표준 랜드사 규격 준수)"}
 
 [사용자 입력 요청]
@@ -407,7 +412,7 @@ with col2:
                         }
                     }
 
-                    # ★ 503 원인 완전 차단: 검증된 gemini-3.8-flash 단독 지정 + 자동 재시도
+                    # 고성능 표준 모델 단독 지정 (프롬프트 초경량화로 503 차단)
                     target_model = 'gemini-3.8-flash'
                     response = None
                     last_error = None
@@ -758,7 +763,7 @@ with col2:
                     st.session_state.generated_file = output.getvalue()
                     st.session_state.generated_filename = file_name
                     st.session_state.ui_status = "success"
-                    st.session_state.ui_msg = f"선배님! '{matched_file_name if matched_file_name else '표준'}' 규격으로 초고속 생성을 마쳤습니다! 다운로드해 주세요! 🙇‍♂️✨"
+                    st.session_state.ui_msg = f"선배님! '{matched_file_name if matched_file_name else '표준'}' 20줄 압축 동선으로 생성을 마쳤습니다! 다운로드해 주세요! 🙇‍♂️✨"
                     st.rerun()
 
                 except Exception as e:
@@ -776,3 +781,4 @@ with col2:
             type="primary",
             use_container_width=True
         )
+        
