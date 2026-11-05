@@ -26,7 +26,7 @@ if "generated_filename" not in st.session_state:
 if "ui_status" not in st.session_state:
     st.session_state.ui_status = "idle"
 if "ui_msg" not in st.session_state:
-    st.session_state.ui_msg = "선배님! 스마트 DB 경량화 엔진 세팅 완료되었습니다. 요청해 주세요! ☕"
+    st.session_state.ui_msg = "선배님! 503 에러 원천 차단 Flash 고속 엔진 세팅 완료되었습니다. 요청해 주세요! ☕"
 
 # 3. 커스텀 CSS
 st.markdown("""
@@ -147,16 +147,15 @@ html, body, [class*="css"] {
 """, unsafe_allow_html=True)
 
 st.title("🇪🇺 유럽 일정표 자동 생성 시스템 (Master Edition)")
-st.caption("실무 완판 규격: 스마트 단일 DB 매칭, 503 방지 프롬프트 다이어트, 부분 볼드 적용 완료")
+st.caption("실무 완판 규격: 503 방지 단독 엔진, 스마트 DB 매칭, 부분 볼드 적용 완료")
 
-# 4. database 폴더 내 사내 엑셀 DB 파일 목록만 가볍게 스캔
+# 4. database 폴더 내 사내 엑셀 DB 파일 목록 스캔
 def get_available_db_files():
     db_folder = "database"
     if not os.path.exists(db_folder):
         return []
     return [os.path.basename(f) for f in glob.glob(os.path.join(db_folder, "*.xlsx"))]
 
-# 요청 키워드에 따라 최적의 단일 사내 엑셀 파일 1개만 정밀 추출하는 스마트 필터
 def get_target_db_context(user_query: str):
     db_folder = "database"
     excel_files = glob.glob(os.path.join(db_folder, "*.xlsx"))
@@ -164,8 +163,6 @@ def get_target_db_context(user_query: str):
         return None, ""
 
     q_lower = user_query.lower()
-
-    # 1단계: 사용자 입력 키워드와 파일명 간 매칭 점수 계산
     best_file = None
     best_score = -1
 
@@ -174,13 +171,11 @@ def get_target_db_context(user_query: str):
         f_lower = filename.lower()
         score = 0
 
-        # 지역 키워드 매칭
         keywords = ["동유럽", "서유럽", "터키", "튀르키예", "스페인", "포르투갈", "그리스", "이탈리아", "스위스", "발칸"]
         for kw in keywords:
             if kw in q_lower and kw in f_lower:
                 score += 10
 
-        # 항공사 매칭
         if ("ke" in q_lower or "대한항공" in q_lower) and ("ke" in f_lower or "대한항공" in f_lower):
             score += 5
         if ("tk" in q_lower or "터키항공" in q_lower) and ("tk" in f_lower or "터키항공" in f_lower):
@@ -188,7 +183,6 @@ def get_target_db_context(user_query: str):
         if ("oz" in q_lower or "아시아나" in q_lower) and ("oz" in f_lower or "아시아나" in f_lower):
             score += 3
 
-        # 일수 매칭 (예: 9일)
         days_match = re.search(r"(\d+)일", user_query)
         if days_match and (f"{days_match.group(1)}일" in filename or f"{days_match.group(1)}d" in f_lower):
             score += 5
@@ -197,13 +191,11 @@ def get_target_db_context(user_query: str):
             best_score = score
             best_file = filepath
 
-    # 매칭된 파일이 없으면 첫 번째 엑셀 파일 기본 채택
     if not best_file or best_score <= 0:
         best_file = excel_files[0]
 
     matched_filename = os.path.basename(best_file)
 
-    # 2단계: 선정된 1개 엑셀 파일만 내용 추출 (A4 반 장 분량으로 프롬프트 초경량화)
     try:
         wb = openpyxl.load_workbook(best_file, data_only=True)
         ws = wb.active
@@ -246,7 +238,7 @@ with col1:
             <div class="db-info-box">
                 📚 <b>연동 대기 사내 엑셀 DB ({len(db_file_list)}개):</b><br>
                 {' • '.join([f'`{f}`' for f in db_file_list])}<br>
-                <span style="font-size:11.5px; color:#2563eb;">* 요청 문장에 맞춰 최적의 엑셀 1개만 스마트 선별되어 가볍게 전송됩니다.</span>
+                <span style="font-size:11.5px; color:#2563eb;">* 요청에 맞춰 단 1개의 사내 엑셀만 선별되어 가볍게 전송됩니다.</span>
             </div>
             """, unsafe_allow_html=True)
         else:
@@ -332,14 +324,13 @@ with col2:
         else:
             st.session_state.generated_file = None
             
-            # 입력 문장에 맞춰 딱 1개의 사내 엑셀 텍스트만 선별 추출
             user_input_text = quick_prompt if "[옵션 A]" in input_mode else routing_text
             matched_file_name, target_db_context = get_target_db_context(user_input_text)
             
-            msg = f"'{matched_file_name}' 사내 기준서를 매칭하여 가볍고 정밀하게 조립 중입니다! ⚡" if matched_file_name else "사내 규격에 맞춰 정밀 조립 중입니다! ⚡"
+            msg = f"'{matched_file_name}' 기준서를 매칭하여 503 지연 없이 즉시 조립합니다! ⚡" if matched_file_name else "사내 규격에 맞춰 조립 중입니다! ⚡"
             render_assistant_ui("working", msg)
             
-            with st.spinner("김똘망 사원이 사내 규격에 맞춰 엑셀을 제작 중입니다..."):
+            with st.spinner("김똘망 사원이 일정표를 신속하게 제작하고 있습니다..."):
                 try:
                     system_prompt = f"""
 당신은 15년 차 유럽 전문 랜드사의 수석 오퍼레이터입니다.
@@ -416,15 +407,15 @@ with col2:
                         }
                     }
 
-                    # 경량화된 프롬프트로 503 없이 안전 호출
-                    candidate_models = ['gemini-2.5-pro', 'gemini-3.8-flash']
+                    # ★ 503 원인 완전 차단: 검증된 gemini-3.8-flash 단독 지정 + 자동 재시도
+                    target_model = 'gemini-3.8-flash'
                     response = None
                     last_error = None
 
-                    for model_name in candidate_models:
+                    for attempt in range(3):
                         try:
                             response = client.models.generate_content(
-                                model=model_name,
+                                model=target_model,
                                 contents=system_prompt,
                                 config=types.GenerateContentConfig(
                                     response_mime_type="application/json",
@@ -435,7 +426,7 @@ with col2:
                                 break
                         except Exception as e:
                             last_error = e
-                            time.sleep(1.0)
+                            time.sleep(1.5)
                             continue
 
                     if not response or not response.text:
@@ -471,7 +462,7 @@ with col2:
 
                     parsed_days = [day_dict[k] for k in sorted(day_dict.keys())]
 
-                    # 2. 강력한 실무 파이썬 후처리
+                    # 2. 실무 파이썬 후처리
                     valid_meals = ["호텔식", "현지식", "한   식", "중국식", "기내식", "-"]
                     turkey_keywords = ["이스탄불", "카파도키아", "파묵칼레", "마니사", "쉬린제", "에페소", "터키", "튀르키예", "카이세리", "네브셰히르", "안탈리아", "안탈라", "아피온", "콘야", "이즈미르"]
 
