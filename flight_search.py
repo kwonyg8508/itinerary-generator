@@ -2,40 +2,60 @@ import streamlit as st
 from datetime import datetime, timedelta
 from serpapi import GoogleSearch
 
-# 도시명 -> IATA 공항 코드 매핑
-AIRPORT_CODES = {
-    "인천": "ICN", "프라하": "PRG", "이스탄불": "IST", 
-    "부다페스트": "BUD", "비엔나": "VIE", "마드리드": "MAD", 
-    "바르셀로나": "BCN", "로마": "FCO", "밀라노": "MXP",
-    "파리": "CDG", "런던": "LHR", "프랑크푸르트": "FRA",
-    "자그레브": "ZAG", "취리히": "ZRH", "리스본": "LIS", "아테네": "ATH"
+# 유럽 주요 50개 공항 IATA 코드 데이터베이스
+EUROPE_AIRPORTS = {
+    # 동유럽 / 발칸
+    "프라하 (PRG)": "PRG", "부다페스트 (BUD)": "BUD", "비엔나 (VIE)": "VIE",
+    "자그레브 (ZAG)": "ZAG", "두브로브니크 (DBV)": "DBV", "스플리트 (SPU)": "SPU",
+    "바르샤바 (WAW)": "WAW", "크라쿠프 (KRK)": "KRK", "류블랴나 (LJU)": "LJU",
+    
+    # 서유럽 / 영국 / 아일랜드
+    "파리 샤를드골 (CDG)": "CDG", "파리 오를리 (ORY)": "ORY",
+    "런던 히드로 (LHR)": "LHR", "런던 개트윅 (LGW)": "LGW",
+    "더블린 (DUB)": "DUB", "암스테르담 (AMS)": "AMS", "브뤼셀 (BRU)": "BRU",
+    
+    # 지중해 / 스페인 / 포르투갈
+    "마드리드 (MAD)": "MAD", "바르셀로나 (BCN)": "BCN", "말라가 (AGP)": "AGP",
+    "리스본 (LIS)": "LIS", "포르투 (OPO)": "OPO",
+    
+    # 이탈리아 / 몰타 / 그리스
+    "로마 피우미치노 (FCO)": "FCO", "밀라노 말펜사 (MXP)": "MXP", "베네치아 (VCE)": "VCE",
+    "피렌체 (FLR)": "FLR", "나폴리 (NAP)": "NAP", "아테네 (ATH)": "ATH",
+    "테살로니키 (SKG)": "SKG", "산토리니 (JTR)": "JTR", "몰타 (MLA)": "MLA",
+    
+    # 독일 / 스위스 / 오스트리아
+    "프랑크푸르트 (FRA)": "FRA", "뮌헨 (MUC)": "MUC", "베를린 (BER)": "BER",
+    "취리히 (ZRH)": "ZRH", "제네바 (GVA)": "GVA", "인스부르크 (INN)": "INN",
+    
+    # 북유럽
+    "코펜하겐 (CPH)": "CPH", "스톡홀름 (ARN)": "ARN", "오슬로 (OSL)": "OSL",
+    "헬싱키 (HEL)": "HEL", "레이캬비크 (KEF)": "KEF",
+    
+    # 튀르키예 / 중동 거점
+    "이스탄불 신공항 (IST)": "IST", "이스탄불 사비하 (SAW)": "SAW",
+    "안탈리아 (AYT)": "AYT", "이즈미르 (ADB)": "ADB",
+    
+    # [직접 입력]
+    "✏️ 공항코드 직접 입력": "CUSTOM"
 }
 
 def normalize_airline_name(name: str) -> str:
-    """항공사 영문/한글 표기 불일치 방지를 위한 정규화"""
-    name_clean = name.replace(" ", "").upper()
-    if "TURKISH" in name_clean or "터키" in name_clean or "THY" in name_clean:
-        return "터키항공"
-    if "LUFTHANSA" in name_clean or "루프트한자" in name_clean:
-        return "루프트한자"
-    if "KOREAN" in name_clean or "대한항공" in name_clean:
-        return "대한항공"
-    if "ASIANA" in name_clean or "아시아나" in name_clean:
-        return "아시아나항공"
-    if "EMIRATES" in name_clean or "에미레이트" in name_clean:
-        return "에미레이트항공"
-    if "QATAR" in name_clean or "카타르" in name_clean:
-        return "카타르항공"
-    if "AIRFRANCE" in name_clean or "에어프랑스" in name_clean:
-        return "에어프랑스"
-    if "KLM" in name_clean:
-        return "KLM네덜란드항공"
-    if "FINNAIR" in name_clean or "핀에어" in name_clean:
-        return "핀에어"
+    """항공사명 표준화"""
+    c = name.replace(" ", "").upper()
+    if any(k in c for k in ["TURKISH", "터키", "THY"]): return "터키항공"
+    if any(k in c for k in ["LUFTHANSA", "루프트한자"]): return "루프트한자"
+    if any(k in c for k in ["KOREAN", "대한항공"]): return "대한항공"
+    if any(k in c for k in ["ASIANA", "아시아나"]): return "아시아나항공"
+    if any(k in c for k in ["EMIRATES", "에미레이트"]): return "에미레이트항공"
+    if any(k in c for k in ["QATAR", "카타르"]): return "카타르항공"
+    if any(k in c for k in ["AIRFRANCE", "에어프랑스"]): return "에어프랑스"
+    if "KLM" in c: return "KLM네덜란드항공"
+    if any(k in c for k in ["FINNAIR", "핀에어"]): return "핀에어"
+    if any(k in c for k in ["ETIHAD", "에티하드"]): return "에티하드항공"
     return name.strip()
 
 def search_single_leg(dep_code, arr_code, flight_date):
-    """구글 플라이트 특정 구간 편도 스케줄 조회"""
+    """구글 플라이트 편도 독립 조회"""
     serpapi_key = st.secrets.get("SERPAPI_API_KEY", "")
     if not serpapi_key:
         st.error("❌ Streamlit Secrets에 'SERPAPI_API_KEY'가 설정되어 있지 않습니다.")
@@ -46,7 +66,7 @@ def search_single_leg(dep_code, arr_code, flight_date):
         "departure_id": dep_code,
         "arrival_id": arr_code,
         "outbound_date": flight_date.strftime("%Y-%m-%d"),
-        "type": "2",  # 순수 One-way 편도 모드
+        "type": "2",
         "currency": "KRW",
         "hl": "ko",
         "gl": "kr",
@@ -61,7 +81,7 @@ def search_single_leg(dep_code, arr_code, flight_date):
             return []
 
         parsed = []
-        for f in flights[:12]:
+        for f in flights[:15]:
             legs = f.get("flights", [])
             if not legs:
                 continue
@@ -87,7 +107,6 @@ def search_single_leg(dep_code, arr_code, flight_date):
             summary = f"[{norm_airline}] {f_nums} | {dep_airport} {dep_t} ➔ {arr_airport} {arr_t} {via_text}"
             
             parsed.append({
-                "raw_airline": raw_airline,
                 "norm_airline": norm_airline,
                 "flight_nums": f_nums,
                 "summary": summary,
@@ -103,43 +122,48 @@ def search_single_leg(dep_code, arr_code, flight_date):
 
 def render_flight_search_ui():
     """Streamlit 상단 다구간 항공 검색 및 일정표 자동 주입 UI"""
-    with st.expander("✈️ [Add-on] 대리점 문의용 다구간 항공 스케줄 조회 & 자동 주입", expanded=True):
-        c1, c2, c3, c4 = st.columns([1.5, 1, 1.2, 1.2])
+    with st.expander("✈️ [Add-on] 유럽 전 지역 실시간 항공 스케줄 조회 & 자동 주입", expanded=True):
+        c1, c2 = st.columns([1.5, 1])
         with c1:
             base_date = st.date_input("출발일 (IN)", datetime.now() + timedelta(days=60))
         with c2:
             tour_days = st.number_input("행사 기간 (일수)", min_value=3, max_value=25, value=9)
+
+        c3, c4 = st.columns(2)
         with c3:
-            city_names = list(AIRPORT_CODES.keys())[1:]
-            in_city = st.selectbox("IN 도시 (도착)", city_names, index=city_names.index("프라하") if "프라하" in city_names else 0)
+            in_sel = st.selectbox("IN 도시 선택", list(EUROPE_AIRPORTS.keys()), index=0)
+            if EUROPE_AIRPORTS[in_sel] == "CUSTOM":
+                in_code = st.text_input("IN 공항 3자리 코드 입력 (예: PRG, OPO)", "PRG").upper().strip()
+                in_city_label = in_code
+            else:
+                in_code = EUROPE_AIRPORTS[in_sel]
+                in_city_label = in_sel.split(" (")[0]
+
         with c4:
-            out_city = st.selectbox("OUT 도시 (출발)", city_names, index=city_names.index("부다페스트") if "부다페스트" in city_names else 2)
+            out_sel = st.selectbox("OUT 도시 선택", list(EUROPE_AIRPORTS.keys()), index=1)
+            if EUROPE_AIRPORTS[out_sel] == "CUSTOM":
+                out_code = st.text_input("OUT 공항 3자리 코드 입력 (예: BUD, DBV)", "BUD").upper().strip()
+                out_city_label = out_code
+            else:
+                out_code = EUROPE_AIRPORTS[out_sel]
+                out_city_label = out_sel.split(" (")[0]
 
-        # 귀국 비행기 탑승일(8일차) 계산
         ret_fly_date = base_date + timedelta(days=tour_days - 2)
-        
-        st.caption(f"🗓️ 매칭 기준: **1일차 출발 {base_date.strftime('%Y-%m-%d')} (인천➔{in_city}) | {tour_days-1}일차 귀국 {ret_fly_date.strftime('%Y-%m-%d')} ({out_city}➔인천)**")
+        st.caption(f"🗓️ 실시간 매칭 요청: **1일차 출발 {base_date.strftime('%Y-%m-%d')} (인천➔{in_code}) | {tour_days-1}일차 귀국 {ret_fly_date.strftime('%Y-%m-%d')} ({out_code}➔인천)**")
 
-        if st.button("🔎 동일 항공사 다구간 왕복 조회", type="primary"):
+        if st.button("🔎 동일 항공사 왕복 스케줄 실시간 조회", type="primary"):
             dep_code = "ICN"
-            in_code = AIRPORT_CODES.get(in_city, "PRG")
-            out_code = AIRPORT_CODES.get(out_city, "BUD")
-            
-            with st.spinner(f"출국(인천➔{in_city}) 및 귀국({out_city}➔인천) 동일 항공사 편을 매칭 중입니다..."):
+            with st.spinner(f"출국(인천➔{in_code}) 및 귀국({out_code}➔인천) 동일 항공사 왕복을 매칭 중입니다..."):
                 outbound_list = search_single_leg(dep_code, in_code, base_date)
                 inbound_list = search_single_leg(out_code, dep_code, ret_fly_date)
                 
-                # 🚨 동일 항공사 100% 일치 건만 필터링
                 matched_pairs = []
                 seen_airlines = set()
                 
                 for ob in outbound_list:
                     o_air = ob["norm_airline"]
-                    # 귀국편 목록에서 동일 항공사 찾기
                     same_rets = [ib for ib in inbound_list if ib["norm_airline"] == o_air]
-                    
                     if same_rets and o_air not in seen_airlines:
-                        # 동일 항공사 매칭 성공 건만 추가
                         matched_pairs.append({
                             "airline": o_air,
                             "out": ob,
@@ -149,14 +173,14 @@ def render_flight_search_ui():
                 
                 st.session_state["flight_pairs"] = matched_pairs
 
-        # 검색 결과 렌더링
+        # 결과 카드 렌더링
         if "flight_pairs" in st.session_state:
             pairs = st.session_state["flight_pairs"]
             if not pairs:
-                st.warning("⚠️ 해당 날짜/구간에 출·귀국 항공사가 완전히 일치하는 왕복 스케줄이 없습니다. 날짜를 변경해 보세요.")
+                st.warning("⚠️ 출·귀국 항공사가 완전히 일치하는 스케줄을 찾지 못했습니다. 날짜를 조정하거나 공항 코드를 확인해 주세요.")
             else:
                 st.write("---")
-                st.markdown(f"#### 🎯 출귀국 동일 항공사 왕복 스케줄 ({len(pairs)}개 항공사 발견)")
+                st.markdown(f"#### 🎯 출귀국 동일 항공사 왕복 스케줄 ({len(pairs)}개 항공사 매칭)")
                 
                 for idx, pair in enumerate(pairs[:5]):
                     ob = pair["out"]
@@ -166,15 +190,15 @@ def render_flight_search_ui():
                     ci, cb = st.columns([4, 1])
                     with ci:
                         st.info(
-                            f"**옵션 {idx+1} [{airline_name}] ⭐ 출귀국 동일 항공사 왕복**\n\n"
+                            f"**옵션 {idx+1} [{airline_name}] ⭐ 왕복 동일 항공사**\n\n"
                             f"• **출국(1일차):** {ob['summary']}\n\n"
                             f"• **귀국({tour_days-1}일차):** {ib['summary']}"
                         )
                     with cb:
                         if st.button("👉 일정표 주입", key=f"inj_pair_{idx}"):
                             d1 = f"1. 인천 출발 / {ob['summary']} 도착 후 호텔 투숙\n"
-                            mid = f"2. {in_city} 시내 핵심 관광지 투어 진행\n3. 전일 관광 및 이동\n4. 이동 및 전일 관광\n"
-                            d_last_prev = f"{tour_days-1}. {out_city} 시내 관광 후 공항 이동 / {ib['summary']} / 기내 숙박\n"
+                            mid = f"2. {in_city_label} 시내 핵심 관광지 투어 진행\n3. 전일 관광 및 이동\n4. 이동 및 전일 관광\n"
+                            d_last_prev = f"{tour_days-1}. {out_city_label} 시내 관광 후 공항 이동 / {ib['summary']} / 기내 숙박\n"
                             d_last = f"{tour_days}. 인천 국제공항 ({ib['arr_time']}) 도착 후 해산"
                             
                             st.session_state["routing_text_injected"] = d1 + mid + d_last_prev + d_last
