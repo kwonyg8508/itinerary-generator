@@ -428,7 +428,7 @@ with col2:
                     }
 
                     # 고성능 표준 모델 단독 지정 (프롬프트 초경량화로 503 차단)
-                    target_model = 'gemini-2.5-flash'
+                    target_model = 'gemini-3.8-flash'
                     response = None
                     last_error = None
 
