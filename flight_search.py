@@ -13,7 +13,7 @@ AIRPORT_CODES = {
 
 def search_single_leg(dep_code, arr_code, flight_date):
     """
-    편도(One-way) 단위로 구글 플라이트 실시간 스케줄을 조회합니다.
+    구글 플라이트에서 특정 구간(편도)만 독립적으로 강제 조회
     """
     serpapi_key = st.secrets.get("SERPAPI_API_KEY", "")
     if not serpapi_key:
@@ -25,45 +25,62 @@ def search_single_leg(dep_code, arr_code, flight_date):
         "departure_id": dep_code,
         "arrival_id": arr_code,
         "outbound_date": flight_date.strftime("%Y-%m-%d"),
-        "type": "2",  # One-way 모드로 출국/귀국을 독립 조회하여 In/Out 도시 상이 문제 해결
+        "type": "2",          # 2 = 순수 One-way (편도 강제)
         "currency": "KRW",
         "hl": "ko",
+        "gl": "kr",
         "api_key": serpapi_key
     }
 
     try:
         search = GoogleSearch(params)
         res = search.get_dict()
-        flights = res.get("best_flights", []) + res.get("other_flights", [])
         
+        # 구글 플라이트 응답 파싱
+        flights = res.get("best_flights", []) + res.get("other_flights", [])
+        if not flights:
+            return []
+
         parsed = []
-        for f in flights[:8]:
+        for f in flights[:6]:
             legs = f.get("flights", [])
             if not legs:
                 continue
+                
             first_leg = legs[0]
             airline = first_leg.get("airline", "항공사").strip()
+            
+            # 실제 출발 공항 및 시간
+            dep_airport = first_leg.get("departure_airport", {}).get("id", dep_code)
             dep_t = first_leg.get("departure_airport", {}).get("time", "")
             
-            # 다구간 경유 편명 조립
-            f_nums = " / ".join([f"{l.get('airline_code', '')}{l.get('flight_number', '')}" for l in legs])
+            # 실제 도착 공항 및 시간
             last_leg = legs[-1]
+            arr_airport = last_leg.get("arrival_airport", {}).get("id", arr_code)
             arr_t = last_leg.get("arrival_airport", {}).get("time", "")
             
+            # 편명 조합 (경유 포함)
+            f_nums = " / ".join([f"{l.get('airline_code', '')}{l.get('flight_number', '')}" for l in legs if l.get('flight_number')])
+            if not f_nums:
+                f_nums = airline
+
             is_transit = len(legs) > 1
             via_text = f"({len(legs)-1}회 경유)" if is_transit else "(직항)"
 
-            summary = f"[{airline}] {f_nums} | {dep_code} {dep_t} ➔ {arr_code} {arr_t} {via_text}"
+            summary = f"[{airline}] {f_nums} | {dep_airport} {dep_t} ➔ {arr_airport} {arr_t} {via_text}"
+            
             parsed.append({
                 "airline": airline,
                 "flight_nums": f_nums,
                 "summary": summary,
+                "dep_airport": dep_airport,
+                "arr_airport": arr_airport,
                 "dep_time": dep_t,
                 "arr_time": arr_t
             })
         return parsed
     except Exception as e:
-        st.error(f"항공 스케줄 조회 오류 ({dep_code}➔{arr_code}): {e}")
+        st.error(f"항공 조회 오류 ({dep_code} ➔ {arr_code}): {e}")
         return []
 
 def render_flight_search_ui():
@@ -71,31 +88,32 @@ def render_flight_search_ui():
     with st.expander("✈️ [Add-on] 대리점 문의용 다구간 항공 스케줄 조회 & 자동 주입", expanded=True):
         c1, c2, c3, c4 = st.columns([1.5, 1, 1.2, 1.2])
         with c1:
+            # 기본 검색일: 오늘 기준 약 60일 뒤
             base_date = st.date_input("출발일 (IN)", datetime.now() + timedelta(days=60))
         with c2:
             tour_days = st.number_input("행사 기간 (일수)", min_value=3, max_value=25, value=9)
         with c3:
-            in_city = st.selectbox("IN 도시 (도착)", list(AIRPORT_CODES.keys())[1:], index=0)  # 기본: 프라하
+            city_names = list(AIRPORT_CODES.keys())[1:] # 인천 제외 목록
+            in_city = st.selectbox("IN 도시 (도착)", city_names, index=city_names.index("프라하") if "프라하" in city_names else 0)
         with c4:
-            out_city = st.selectbox("OUT 도시 (출발)", list(AIRPORT_CODES.keys())[1:], index=2) # 기본: 부다페스트
+            out_city = st.selectbox("OUT 도시 (출발)", city_names, index=city_names.index("부다페스트") if "부다페스트" in city_names else 2)
 
-        # 9일 행사 기준: 8일차 현지 출발(귀국편 탑승), 9일차 인천 도착
+        # 귀국 비행기 탑승일(8일차) 및 한국 도착일(9일차) 계산
         ret_fly_date = base_date + timedelta(days=tour_days - 2)
-        end_date = base_date + timedelta(days=tour_days - 1)
         
-        st.caption(f"🗓️ 실시간 매칭 일정: **1일차 출발 {base_date.strftime('%Y-%m-%d')} (인천➔{in_city}) | {tour_days-1}일차 귀국 {ret_fly_date.strftime('%Y-%m-%d')} ({out_city}➔인천)**")
+        st.caption(f"🗓️ 실시간 매칭 요청: **출국 {base_date.strftime('%Y-%m-%d')} (인천➔{in_city}) | 귀국탑승 {ret_fly_date.strftime('%Y-%m-%d')} ({out_city}➔인천)**")
 
         if st.button("🔎 다구간(In/Out) 실시간 스케줄 조회", type="primary"):
             dep_code = "ICN"
             in_code = AIRPORT_CODES.get(in_city, "PRG")
             out_code = AIRPORT_CODES.get(out_city, "BUD")
             
-            with st.spinner(f"인천➔{in_city} 출국편 및 {out_city}➔인천 귀국편 데이터를 매칭 중입니다..."):
+            with st.spinner(f"1구간(인천➔{in_city}) 및 2구간({out_city}➔인천)을 독립 조회하여 매칭 중입니다..."):
                 outbound_list = search_single_leg(dep_code, in_code, base_date)
                 inbound_list = search_single_leg(out_code, dep_code, ret_fly_date)
                 
                 if not outbound_list or not inbound_list:
-                    st.warning("⚠️ 해당 날짜의 운항 스케줄을 가져오지 못했습니다. 출발일자가 미래인지 확인해 주세요.")
+                    st.warning("⚠️ 스케줄을 가져오지 못했습니다. 날짜가 미래인지, 해당 노선에 운항 편이 있는지 확인해 주세요.")
                     st.session_state["flight_pairs"] = []
                 else:
                     # 동일 항공사 왕복 우선 매칭
@@ -112,7 +130,7 @@ def render_flight_search_ui():
         # 검색 결과 카드 표시
         if "flight_pairs" in st.session_state and st.session_state["flight_pairs"]:
             st.write("---")
-            st.markdown("#### 🎯 실시간 추천 다구간 왕복 조합")
+            st.markdown(f"#### 🎯 실시간 다구간 조합 결과: [IN: {in_city} / OUT: {out_city}]")
             
             for idx, pair in enumerate(st.session_state["flight_pairs"][:5]):
                 ob = pair["out"]
