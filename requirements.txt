@@ -2,3 +2,5 @@ streamlit
 openpyxl
 google-genai
 google-search-results
+beautifulsoup4
+requests
