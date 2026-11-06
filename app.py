@@ -24,7 +24,7 @@ except ImportError:
 # 1. 페이지 설정
 st.set_page_config(page_title="유럽 랜드사 일정표 생성기 (Master Edition)", layout="wide", page_icon="🇪🇺")
 
-# 2. 세션 상태(Session State) 초기화
+# 2. 세션 상태 초기화
 if "generated_file" not in st.session_state:
     st.session_state.generated_file = None
 if "generated_filename" not in st.session_state:
@@ -32,7 +32,7 @@ if "generated_filename" not in st.session_state:
 if "ui_status" not in st.session_state:
     st.session_state.ui_status = "idle"
 if "ui_msg" not in st.session_state:
-    st.session_state.ui_msg = "선배님! 7대 실무 수배 룰(시간 보정·08:55 해제·동일항공사 매칭) 세팅 완료되었습니다. 요청해 주세요! ☕"
+    st.session_state.ui_msg = "선배님! 2행 전용차량 고정 및 도시 중복제거 룰 장착 완료되었습니다. 요청해 주세요! ☕"
 if "routing_text_injected" not in st.session_state:
     st.session_state.routing_text_injected = ""
 if "selected_input_mode" not in st.session_state:
@@ -42,128 +42,55 @@ if "selected_input_mode" not in st.session_state:
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Pretendard:wght@400;600;700&display=swap');
-
-html, body, [class*="css"] {
-    font-family: 'Pretendard', sans-serif;
-}
-
+html, body, [class*="css"] { font-family: 'Pretendard', sans-serif; }
 .assistant-card {
-    background: #ffffff;
-    border: 2px solid #e2e8f0;
-    border-radius: 16px;
-    padding: 16px;
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.04);
-    display: flex;
-    align-items: center;
-    gap: 16px;
-    margin-bottom: 20px;
+    background: #ffffff; border: 2px solid #e2e8f0; border-radius: 16px; padding: 16px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.04); display: flex; align-items: center; gap: 16px; margin-bottom: 20px;
 }
-
 .gif-wrapper {
-    width: 135px;
-    height: 125px;
-    flex-shrink: 0;
-    border-radius: 12px;
-    overflow: hidden;
-    border: 2px solid #cbd5e1;
-    background: #0f172a;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    width: 135px; height: 125px; flex-shrink: 0; border-radius: 12px; overflow: hidden;
+    border: 2px solid #cbd5e1; background: #0f172a; display: flex; align-items: center; justify-content: center;
 }
-
-.gif-wrapper img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    image-rendering: pixelated;
-}
-
+.gif-wrapper img { width: 100%; height: 100%; object-fit: cover; image-rendering: pixelated; }
 .speech-bubble {
-    flex-grow: 1;
-    background: #f8fafc;
-    border: 1.5px solid #e2e8f0;
-    border-radius: 12px;
-    padding: 14px 16px;
-    position: relative;
+    flex-grow: 1; background: #f8fafc; border: 1.5px solid #e2e8f0; border-radius: 12px;
+    padding: 14px 16px; position: relative;
 }
-
 .speech-bubble::before {
-    content: '';
-    position: absolute;
-    left: -10px;
-    top: 50%;
-    transform: translateY(-50%);
-    border-width: 6px 10px 6px 0;
-    border-style: solid;
-    border-color: transparent #e2e8f0 transparent transparent;
+    content: ''; position: absolute; left: -10px; top: 50%; transform: translateY(-50%);
+    border-width: 6px 10px 6px 0; border-style: solid; border-color: transparent #e2e8f0 transparent transparent;
 }
-
-.assistant-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 6px;
-}
-
-.assistant-name {
-    font-size: 14px;
-    font-weight: 700;
-    color: #1e293b;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-}
-
-.assistant-badge {
-    font-size: 11px;
-    font-weight: 600;
-    padding: 3px 8px;
-    border-radius: 20px;
-}
-
+.assistant-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+.assistant-name { font-size: 14px; font-weight: 700; color: #1e293b; display: flex; align-items: center; gap: 6px; }
+.assistant-badge { font-size: 11px; font-weight: 600; padding: 3px 8px; border-radius: 20px; }
 .badge-idle { background: #e2e8f0; color: #475569; }
 .badge-working { background: #fee2e2; color: #ef4444; }
 .badge-success { background: #dcfce7; color: #15803d; }
-
-.assistant-message {
-    font-size: 13.5px;
-    font-weight: 500;
-    color: #334155;
-    line-height: 1.5;
-}
-
+.assistant-message { font-size: 13.5px; font-weight: 500; color: #334155; line-height: 1.5; }
 .db-info-box {
-    background: #eff6ff;
-    border: 1px solid #bfdbfe;
-    border-radius: 8px;
-    padding: 10px 14px;
-    font-size: 13px;
-    color: #1e40af;
-    margin-bottom: 12px;
+    background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px;
+    padding: 10px 14px; font-size: 13px; color: #1e40af; margin-bottom: 12px;
 }
 </style>
 """, unsafe_allow_html=True)
 
 st.title("🇪🇺 유럽 일정표 자동 생성 시스템 (Master Edition)")
-st.caption("실무 완판 규격: 7대 실무 수배 룰 적용 완료 | 사내 DB 20줄 초경량화 | 명소 부분 볼드")
+st.caption("실무 완판 규격: 2행 전용차량 고정 | 도시 중복 제거 | 유럽 50개 도시 확장 | 명소 부분 볼드")
 
-# [Add-on] 실시간 항공 스케줄 조회 & 자동 주입 엔진 렌더링
+# 항공 스케줄 Add-on 렌더링
 if render_flight_search_ui:
     render_flight_search_ui()
 
-# 4. database 폴더 내 사내 엑셀 DB 목록 스캔
+# 사내 엑셀 DB 로드
 def get_available_db_files():
     db_folder = "database"
-    if not os.path.exists(db_folder):
-        return []
+    if not os.path.exists(db_folder): return []
     return [os.path.basename(f) for f in glob.glob(os.path.join(db_folder, "*.xlsx"))]
 
 def get_target_db_context(user_query: str):
     db_folder = "database"
     excel_files = glob.glob(os.path.join(db_folder, "*.xlsx"))
-    if not excel_files:
-        return None, ""
+    if not excel_files: return None, ""
 
     q_lower = user_query.lower()
     best_file = None
@@ -173,22 +100,14 @@ def get_target_db_context(user_query: str):
         filename = os.path.basename(filepath)
         f_lower = filename.lower()
         score = 0
-
-        keywords = ["동유럽", "서유럽", "터키", "튀르키예", "스페인", "포르투갈", "그리스", "이탈리아", "스위스", "발칸"]
-        for kw in keywords:
-            if kw in q_lower and kw in f_lower:
-                score += 10
-
-        if ("ke" in q_lower or "대한항공" in q_lower) and ("ke" in f_lower or "대한항공" in f_lower):
-            score += 5
-        if ("tk" in q_lower or "터키항공" in q_lower) and ("tk" in f_lower or "터키항공" in f_lower):
-            score += 5
-        if ("oz" in q_lower or "아시아나" in q_lower) and ("oz" in f_lower or "아시아나" in f_lower):
-            score += 3
+        for kw in ["동유럽", "서유럽", "터키", "튀르키예", "스페인", "포르투갈", "그리스", "이탈리아", "스위스", "발칸"]:
+            if kw in q_lower and kw in f_lower: score += 10
+        if ("ke" in q_lower or "대한항공" in q_lower) and ("ke" in f_lower or "대한항공" in f_lower): score += 5
+        if ("tk" in q_lower or "터키항공" in q_lower) and ("tk" in f_lower or "터키항공" in f_lower): score += 5
+        if ("oz" in q_lower or "아시아나" in q_lower) and ("oz" in f_lower or "아시아나" in f_lower): score += 3
 
         days_match = re.search(r"(\d+)일", user_query)
-        if days_match and (f"{days_match.group(1)}일" in filename or f"{days_match.group(1)}d" in f_lower):
-            score += 5
+        if days_match and (f"{days_match.group(1)}일" in filename or f"{days_match.group(1)}d" in f_lower): score += 5
 
         if score > best_score:
             best_score = score
@@ -198,31 +117,23 @@ def get_target_db_context(user_query: str):
         best_file = excel_files[0]
 
     matched_filename = os.path.basename(best_file)
-
     try:
         wb = openpyxl.load_workbook(best_file, data_only=True)
         ws = wb.active
         content_summary = []
-        
         for r in range(4, min(ws.max_row + 1, 90)):
             city = ws.cell(r, 2).value
             schedule = str(ws.cell(r, 5).value or "").strip()
-            
             if schedule.startswith("▶") or (city and len(str(city).strip()) > 1):
                 clean_sc = schedule.replace("\n", " ")[:60]
                 line = f"도시: {str(city).strip()} | {clean_sc}" if city else f"{clean_sc}"
                 content_summary.append(line)
-                
-            if len(content_summary) >= 20:
-                break
-
-        extracted = f"=== [사내 표준 핵심 동선(20줄 압축): {matched_filename}] ===\n" + "\n".join(content_summary)
-        return matched_filename, extracted
+            if len(content_summary) >= 20: break
+        return matched_filename, f"=== [사내 표준 핵심 동선(20줄 압축): {matched_filename}] ===\n" + "\n".join(content_summary)
     except Exception:
         return matched_filename, ""
 
 db_file_list = get_available_db_files()
-
 api_key = st.secrets.get("GEMINI_API_KEY")
 client = genai.Client(api_key=api_key) if api_key else None
 
@@ -230,8 +141,6 @@ col1, col2 = st.columns([1, 1])
 
 with col1:
     st.subheader("1. 입력 방식 선택")
-    
-    # 상단 검색기에서 일정표 주입 시 [옵션 B] 라디오 버튼으로 자동 연동
     input_mode_options = ["[옵션 A] 간편 단문 요청 (사내 DB 자동 매칭)", "[옵션 B] 직접 루팅 입력 (정밀 항공/일정 파싱)"]
     selected_mode_idx = 1 if st.session_state.selected_input_mode == input_mode_options[1] else 0
 
@@ -260,10 +169,7 @@ with col1:
     tour_title = st.text_input("행사명 (선택)", placeholder="예: 2026-12-05 동유럽 9일 TK")
     
     if "[옵션 A]" in input_mode:
-        quick_prompt = st.text_input(
-            "간단 요청 입력",
-            placeholder="예: 동유럽 9일 TK 프라하인 부다페스트아웃 / 이탈리아 일주 9일"
-        )
+        quick_prompt = st.text_input("간단 요청 입력", placeholder="예: 동유럽 9일 TK 프라하인 부다페스트아웃")
     else:
         current_injected_val = st.session_state.get("routing_text_injected", "")
         routing_text = st.text_area(
@@ -281,24 +187,16 @@ with col2:
 
     def render_assistant_ui(status="idle", message="선배님, 요청해 주시면 즉각 빌드하겠습니다! ☕"):
         if status == "success":
-            badge_text = "🎉 제작 완료!"
-            badge_class = "badge-success"
-            target_candidates = ["done.gif", "done.png", "assistant.gif", "working.gif"]
+            badge_text, badge_class = "🎉 제작 완료!", "badge-success"
+            cands = ["done.gif", "done.png", "assistant.gif", "working.gif"]
         elif status == "working":
-            badge_text = "🔥 폭풍 작업 중"
-            badge_class = "badge-working"
-            target_candidates = ["working.gif", "assistant.gif", "done.gif"]
+            badge_text, badge_class = "🔥 폭풍 작업 중", "badge-working"
+            cands = ["working.gif", "assistant.gif", "done.gif"]
         else:
-            badge_text = "☕ 대기 중"
-            badge_class = "badge-idle"
-            target_candidates = ["working.gif", "assistant.gif", "done.gif"]
+            badge_text, badge_class = "☕ 대기 중", "badge-idle"
+            cands = ["working.gif", "assistant.gif", "done.gif"]
 
-        media_file = None
-        for cand in target_candidates:
-            if os.path.exists(cand):
-                media_file = cand
-                break
-
+        media_file = next((c for c in cands if os.path.exists(c)), None)
         media_b64 = ""
         if media_file:
             with open(media_file, "rb") as f:
@@ -306,12 +204,9 @@ with col2:
                 media_b64 = f"data:{mime};base64,{base64.b64encode(f.read()).decode()}"
 
         img_tag = f'<img src="{media_b64}" alt="김똘망 사원">' if media_b64 else '<span style="color:white;font-size:24px;">👓</span>'
-
         html_content = f"""
         <div class="assistant-card">
-            <div class="gif-wrapper">
-                {img_tag}
-            </div>
+            <div class="gif-wrapper">{img_tag}</div>
             <div class="speech-bubble">
                 <div class="assistant-header">
                     <span class="assistant-name">👓 김똘망 사원 <span style="font-size:12px; font-weight:normal; color:#64748b;">(유럽 OP팀 막내)</span></span>
@@ -324,7 +219,6 @@ with col2:
         ui_placeholder.markdown(html_content, unsafe_allow_html=True)
 
     render_assistant_ui(st.session_state.ui_status, st.session_state.ui_msg)
-
     generate_btn = st.button("🚀 엑셀 일정표 생성하기", type="primary", use_container_width=True)
 
     if generate_btn:
@@ -336,12 +230,10 @@ with col2:
             st.warning("루팅 정보를 입력해 주세요.")
         else:
             st.session_state.generated_file = None
-            
             user_input_text = quick_prompt if "[옵션 A]" in input_mode else routing_text
             matched_file_name, target_db_context = get_target_db_context(user_input_text)
             
-            msg = f"'{matched_file_name}' 20줄 핵심 동선과 7대 실무 수배 룰을 결합하여 완판본을 제작합니다! ⚡" if matched_file_name else "실무 수배 규격으로 조립 중입니다! ⚡"
-            render_assistant_ui("working", msg)
+            render_assistant_ui("working", "실무 수배 규격(2행 전용차량 고정 및 도시 중복제거)으로 조립 중입니다! ⚡")
             
             with st.spinner("김똘망 사원이 일정표를 신속하게 제작하고 있습니다..."):
                 try:
@@ -355,36 +247,19 @@ with col2:
 [사용자 입력 요청]
 {user_input_text}
 
-[🚨 7대 실무 절대 규칙 - 위반 절대 금지]
-1. **도시 이동 표기 규칙 (가장 중요)**:
-   - 미사여구(수려한, 고풍스러운 등) 절대 사용 금지!
-   - 반드시 **'[도착도시명]으로 이동 (약 O시간 O분 소요)'** 형태로만 작성할 것.
-   - 이동 시간은 구글 일반 승용차 기준 시간에서 대형버스 운행을 감안하여 **무조건 +30분 합산**된 시간을 기재할 것.
-   - 예: 밀라노 ➔ 베네치아 (구글 3시간) -> `베네치아로 이동 (약 3시간 30분 소요)`
-
-2. **'석식 후' 단독 행 전면 삭제**:
-   - 매일 일정 끝에 반복되던 `석식 후` 단독 행은 **절대 작성하지 마세요**.
-   - 관광 투어가 끝나면 곧바로 `호텔 투숙 및 휴식` 또는 `호텔로 이동 후 휴식`으로 마감하세요.
-
-3. **이탈리아 투어 필수 예외 룰**:
-   - **우피치 미술관 제외**: 피렌체 투어 시 사전 예약 및 대기시간이 극심한 '우피치 미술관'은 기본 일정에서 **반드시 제외**할 것. (시뇨리아 광장, 두오모 성당 등 시내 중심 도보 투어로 대체)
-   - **친퀘테레 1개 마을 제한**: 친퀘테레 투어 시 여러 마을을 돌지 말고 **반드시 대표 1개 마을만 방문** 후 다음 목적지로 이동할 것.
-
-4. **교통편 및 시간 규격화**:
-   - 2일차부터 마지막 전날까지 도시간 이동 및 투어가 있는 날은 `transport="전용차량"`, `time="전  일"`을 첫 번째 이동 또는 투어 행에 명확히 표기할 것.
-   - 세모표(▶) 관광지 행에는 시간(time)을 빈칸("")으로 비워둘 것.
-
-5. **항공 및 귀국 시간 규칙 (절대 준수)**:
-   - 1일차 출국 및 마지막 전날 귀국 비행기 편명과 시간을 요청 내용 그대로 정확히 반영할 것.
-   - **인천 도착 시간**: 마지막 날 인천 도착 시간은 08:55로 고정하지 말고, **사용자가 입력한 항공편의 실제 도착시간**을 그대로 반영할 것. (도착시간이 지정되지 않은 경우에만 통상적인 오전 도착시간 반영)
-   - 귀국 출발 행 다음 행은 `schedule="기내 숙박"`, `hotel="HOTEL : 기내 숙박"`.
-
-6. **관광 명소 서식 (부분 볼드 처리)**:
-   - 설명은 보통체로, 맨 뒤 핵심 명소만 **기호로 감쌀 것: ` ▶ [설명] **[핵심명소]**`
-
-7. **식사 및 호텔**:
-   - 식사는 "호텔식", "현지식", "한   식", "중국식", "기내식", "-" 중에서만 기재.
-   - 호텔: 튀르키예는 "HOTEL : ANY 5* HOTEL CLASS", 그 외 유럽은 "HOTEL : ANY 4* HOTEL CLASS".
+[🚨 7대 실무 절대 규칙]
+1. **도시명 기재 원칙 (중복 도배 절대 금지)**:
+   - 도시는 **새로운 도시에 처음 도착했을 때 딱 1번만** city 칸에 기재할 것.
+   - 다음 날 아침 첫 번째 행(호텔 조식 행)에 **시작 도시명으로 1회만** 기재할 것.
+   - 같은 도시 안에서 진행되는 관광지(▶), 이동, 호텔 투숙 행에는 city를 **반드시 빈칸("")**으로 둘 것!
+2. **도시 이동 표기 규격**:
+   - 미사여구 없이 반드시 **'[도착도시명]으로 이동 (약 O시간 O분 소요)'** 형식으로 작성.
+   - 이동 시간은 구글 기준 시간에 대형버스 안전 여유 **무조건 +30분 합산**.
+3. **'석식 후' 단독 행 전면 삭제**: 투어 종료 후 곧바로 `호텔 투숙 및 휴식`.
+4. **우피치 미술관 제외 & 친퀘테레 1개 마을 제한** 준수.
+5. **항공 및 귀국 시간**: 실제 항공 시간표 그대로 반영. (인천 도착시간 임의 고정 금지)
+6. **관광 명소 부분 볼드**: ` ▶ [설명] **[핵심명소]**` 규격 준수.
+7. **식사/호텔**: 조/중/석 규격 준수, 튀르키예 5성 / 유럽 4성.
 """
 
                     json_schema = {
@@ -406,10 +281,7 @@ with col2:
                                         "required": ["schedule"]
                                     }
                                 },
-                                "meals": {
-                                    "type": "ARRAY",
-                                    "items": {"type": "STRING"}
-                                },
+                                "meals": {"type": "ARRAY", "items": {"type": "STRING"}},
                                 "hotel": {"type": "STRING"}
                             },
                             "required": ["day", "rows"]
@@ -430,8 +302,7 @@ with col2:
                                     response_schema=json_schema
                                 )
                             )
-                            if response and response.text:
-                                break
+                            if response and response.text: break
                         except Exception as e:
                             last_error = e
                             time.sleep(1.5)
@@ -447,25 +318,20 @@ with col2:
                     
                     parsed_raw = json.loads(raw_text)
                     
-                    # 1. Day 병합 및 기본 정제
                     day_dict = {}
                     for item in parsed_raw:
                         d_num = item.get("day", 1)
                         if d_num not in day_dict:
                             day_dict[d_num] = {
-                                "day": d_num,
-                                "rows": [],
+                                "day": d_num, "rows": [],
                                 "meals": item.get("meals") or ["-", "-", "-"],
                                 "hotel": item.get("hotel") or ""
                             }
                         for r_item in item.get("rows", []):
                             sc = str(r_item.get("schedule") or "").strip()
-                            # '석식 후' 단독 행 원천 필터링
-                            if sc in ["석식 후", "석식후", "석식 후 호텔 투숙"]:
-                                continue
+                            if sc in ["석식 후", "석식후", "석식 후 호텔 투숙"]: continue
                             if r_item.get("schedule") or r_item.get("city") or r_item.get("transport"):
-                                sc_clean = sc.replace("[", "").replace("]", "")
-                                r_item["schedule"] = sc_clean
+                                r_item["schedule"] = sc.replace("[", "").replace("]", "")
                                 day_dict[d_num]["rows"].append(r_item)
                         if item.get("hotel"):
                             day_dict[d_num]["hotel"] = str(item.get("hotel")).replace("[", "").replace("]", "").strip()
@@ -474,7 +340,9 @@ with col2:
 
                     parsed_days = [day_dict[k] for k in sorted(day_dict.keys())]
 
-                    # 2. 실무 파이썬 정밀 후처리
+                    # -------------------------------------------------------------
+                    # 💡 실무 정밀 후처리 (2행 전용차량 고정 + 도시명 중복 제거)
+                    # -------------------------------------------------------------
                     valid_meals = ["호텔식", "현지식", "한   식", "중국식", "기내식", "-"]
                     turkey_keywords = ["이스탄불", "카파도키아", "파묵칼레", "터키", "튀르키예", "안탈리아"]
                     total_days_cnt = len(parsed_days)
@@ -486,98 +354,78 @@ with col2:
                         cleaned_rows = []
                         for r in rows:
                             sc = str(r.get("schedule") or "").strip()
-                            # 불필요한 [도시]관광 단독행 및 석식후 제거
-                            if re.match(r"^[가-힣a-zA-Z\s]+관광$", sc) and not sc.startswith("▶"):
-                                continue
-                            if sc in ["석식 후", "석식후"]:
-                                continue
+                            if re.match(r"^[가-힣a-zA-Z\s]+관광$", sc) and not sc.startswith("▶"): continue
+                            if sc in ["석식 후", "석식후"]: continue
                             cleaned_rows.append(r)
                         rows = cleaned_rows
 
-                        # 2일차 이후 아침 첫 행 조식 정돈
+                        # 2일차 이후 조식 후 정돈
                         if d_num > 1 and len(rows) > 0 and d_num != total_days_cnt:
                             first_sc = rows[0].get("schedule", "")
                             if "조식" in first_sc and len(first_sc) > 8:
                                 remainder = first_sc.replace("호텔 조식 후", "").replace("조식 후", "").strip()
-                                if remainder.startswith("후"):
-                                    remainder = remainder[1:].strip()
+                                if remainder.startswith("후"): remainder = remainder[1:].strip()
                                 rows[0]["schedule"] = "호텔 조식 후"
                                 rows.insert(1, {"city": "", "transport": "", "time": "", "schedule": remainder})
 
-                        # 도시명 중복 표기 방지
-                        if d_num > 1:
-                            last_city = None
-                            for r in rows:
-                                curr_c = str(r.get("city") or "").strip()
-                                if curr_c:
-                                    if curr_c == last_city:
-                                        r["city"] = ""
-                                    else:
-                                        last_city = curr_c
-
-                        # 전용차량 & 전  일 자동 배치
-                        bus_placed = False
-                        for r in rows:
-                            tm = str(r.get("time") or "").strip()
-                            tr = str(r.get("transport") or "").strip()
-                            sc = str(r.get("schedule") or "").strip()
-
-                            if sc.startswith("▶"):
-                                r["time"] = ""
-
-                            if tr == "전용차량":
-                                if not bus_placed:
-                                    bus_placed = True
-                                    r["time"] = "전  일"
+                        # 🚨 1. [도시명 중복 제거]: 같은 도시명이 연속되거나 당일 내 중복 표기 방지
+                        current_day_cities = set()
+                        for idx, r in enumerate(rows):
+                            c_val = str(r.get("city") or "").strip()
+                            if c_val:
+                                if c_val in current_day_cities and idx > 0:
+                                    r["city"] = ""
                                 else:
-                                    r["transport"] = ""
-                                    if r.get("time") == "전  일":
-                                        r["time"] = ""
+                                    current_day_cities.add(c_val)
 
-                        # 전용차량 표기가 아예 누락된 투어일 보정
-                        if d_num > 1 and d_num < total_days_cnt and not bus_placed and len(rows) > 1:
+                        # 🚨 2. [전용차량 / 전  일]: 2일차부터 마지막 전날까지 2번째 행(index 1)에 무조건 강제 고정
+                        if 1 < d_num < total_days_cnt and len(rows) > 1:
+                            # 기존 행들의 전용차량/전일 표기 초기화
+                            for r in rows:
+                                if r.get("transport") == "전용차량": r["transport"] = ""
+                                if r.get("time") == "전  일": r["time"] = ""
+                                if str(r.get("schedule", "")).startswith("▶"): r["time"] = ""
+                            
+                            # 2번째 행(index 1)에 정확히 고정 박기
                             rows[1]["transport"] = "전용차량"
                             rows[1]["time"] = "전  일"
 
+                        # 1일차 공항 ➔ 호텔 이동 행 처리
+                        if d_num == 1:
+                            for r in rows:
+                                sc = str(r.get("schedule") or "")
+                                if "호텔로 이동" in sc:
+                                    r["transport"] = "전용차량"
+                                    r["time"] = ""
+
                         item["rows"] = rows
 
-                        # 식사 정제
+                        # 식사 정돈
                         cleaned_meals = []
                         for m in item.get("meals", []):
                             m_str = str(m or "").strip()
-                            if "호텔" in m_str or "조식" in m_str:
-                                cleaned_meals.append("호텔식")
-                            elif "한식" in m_str:
-                                cleaned_meals.append("한   식")
-                            elif "중식" in m_str or "중국" in m_str:
-                                cleaned_meals.append("중국식")
-                            elif "기내" in m_str:
-                                cleaned_meals.append("기내식")
-                            elif "현지" in m_str or "특식" in m_str:
-                                cleaned_meals.append("현지식")
-                            elif m_str in valid_meals:
-                                cleaned_meals.append(m_str)
-                            else:
-                                cleaned_meals.append("현지식" if m_str != "-" else "-")
-                        while len(cleaned_meals) < 3:
-                            cleaned_meals.append("-")
+                            if "호텔" in m_str or "조식" in m_str: cleaned_meals.append("호텔식")
+                            elif "한식" in m_str: cleaned_meals.append("한   식")
+                            elif "중식" in m_str or "중국" in m_str: cleaned_meals.append("중국식")
+                            elif "기내" in m_str: cleaned_meals.append("기내식")
+                            elif "현지" in m_str or "특식" in m_str: cleaned_meals.append("현지식")
+                            elif m_str in valid_meals: cleaned_meals.append(m_str)
+                            else: cleaned_meals.append("현지식" if m_str != "-" else "-")
+                        while len(cleaned_meals) < 3: cleaned_meals.append("-")
                         item["meals"] = cleaned_meals[:3]
 
-                        # 마지막 전날: 기내 숙박
+                        # 마지막 전날 / 마지막 날 처리
                         if d_num == total_days_cnt - 1:
                             item["rows"] = [r for r in rows if "인천 도착" not in r.get("schedule", "")]
-                            has_night_flight = any("기내 숙박" in r.get("schedule", "") for r in item["rows"])
-                            if not has_night_flight:
+                            has_night = any("기내 숙박" in r.get("schedule", "") for r in item["rows"])
+                            if not has_night:
                                 item["rows"].append({"city": "인  천", "transport": "", "time": "", "schedule": "기내 숙박"})
                             item["hotel"] = "HOTEL : 기내 숙박"
-                            if len(item["meals"]) == 3:
-                                item["meals"][2] = "기내식"
+                            if len(item["meals"]) == 3: item["meals"][2] = "기내식"
 
-                        # 마지막 날: 08:55 고정 제거! 실제 항공 도착시간 유지
                         elif d_num == total_days_cnt:
                             orig_time = rows[0].get("time", "") if len(rows) > 0 else ""
                             final_arr_time = orig_time if re.match(r"^\d{1,2}:\d{2}$", orig_time) else ""
-                            
                             item["rows"] = [
                                 {"city": "인  천", "transport": "", "time": final_arr_time, "schedule": "인천 국제공항 도착 후 해산"}
                             ]
@@ -588,7 +436,7 @@ with col2:
                             is_turkey = any(tk in all_text for tk in turkey_keywords)
                             item["hotel"] = "HOTEL : ANY 5* HOTEL CLASS" if is_turkey else "HOTEL : ANY 4* HOTEL CLASS"
 
-                    # 3. 엑셀 워크북 생성
+                    # 3. 엑셀 워크북 빌드
                     wb = openpyxl.Workbook()
                     ws = wb.active
                     ws.title = "일정표"
@@ -605,7 +453,6 @@ with col2:
                     
                     fill_title = PatternFill(start_color="FFFFCC", end_color="FFFFCC", fill_type="solid")
                     fill_hotel = PatternFill(start_color="EFEFEF", end_color="EFEFEF", fill_type="solid")
-                    
                     align_center = Alignment(horizontal="center", vertical="center")
                     align_mid_left = Alignment(horizontal="left", vertical="center", wrap_text=True)
                     
@@ -622,7 +469,6 @@ with col2:
                         cell.fill = fill_title
                         cell.border = Border(top=med_side, bottom=med_side, left=med_side if c==1 else None, right=med_side if c==7 else None)
                     ws.merge_cells("A1:G1")
-                    
                     ws.row_dimensions[2].height = 13.0
                     
                     headers = ["날짜", "도시", "교통편", "시간", "일정", "식사", ""]
@@ -663,42 +509,28 @@ with col2:
                             r = cur_row + r_idx
                             ws.row_dimensions[r].height = 18.75
                             is_last_row = (r_idx == total_rows - 1)
-                            
                             for c in range(1, 8):
                                 cell = ws.cell(r, c)
                                 cell.font = font_body
-                                
                                 b_top = thin_side if (is_last_row and has_hotel) else None
                                 b_bottom = med_side if is_last_row else None
                                 b_left = med_side if c == 1 else thin_side
                                 b_right = med_side if c == 7 else thin_side
-                                
-                                if is_last_row and has_hotel:
-                                    cell.fill = fill_hotel
+                                if is_last_row and has_hotel: cell.fill = fill_hotel
                                 cell.border = Border(top=b_top, bottom=b_bottom, left=b_left, right=b_right)
                         
-                        cell_d1 = ws.cell(cur_row, 1, day_str)
-                        cell_d1.font = font_bold
-                        cell_d1.alignment = align_center
-                        
-                        cell_d2 = ws.cell(cur_row + 1, 1, date_str)
-                        cell_d2.font = font_body
-                        cell_d2.alignment = align_center
-                        
-                        cell_d3 = ws.cell(cur_row + 2, 1, weekday_str)
-                        cell_d3.font = font_body
-                        cell_d3.alignment = align_center
+                        ws.cell(cur_row, 1, day_str).font = font_bold
+                        ws.cell(cur_row, 1).alignment = align_center
+                        ws.cell(cur_row + 1, 1, date_str).alignment = align_center
+                        ws.cell(cur_row + 2, 1, weekday_str).alignment = align_center
                         
                         for idx, r_data in enumerate(rows_data):
                             r = cur_row + idx
                             sc_text = str(r_data.get("schedule") or "")
                             
-                            if r_data.get("city"):
-                                ws.cell(r, 2, str(r_data.get("city") or "")).alignment = align_center
-                            if r_data.get("transport"):
-                                ws.cell(r, 3, str(r_data.get("transport") or "")).alignment = align_center
-                            if r_data.get("time"):
-                                ws.cell(r, 4, str(r_data.get("time") or "")).alignment = align_center
+                            if r_data.get("city"): ws.cell(r, 2, str(r_data.get("city") or "")).alignment = align_center
+                            if r_data.get("transport"): ws.cell(r, 3, str(r_data.get("transport") or "")).alignment = align_center
+                            if r_data.get("time"): ws.cell(r, 4, str(r_data.get("time") or "")).alignment = align_center
                                 
                             cell_sc = ws.cell(r, 5)
                             cell_sc.alignment = align_mid_left
@@ -749,14 +581,13 @@ with col2:
                     
                     output = io.BytesIO()
                     wb.save(output)
-                    
                     final_title = tour_title.strip() if tour_title.strip() else "유럽투어"
                     file_name = f"{start_date.strftime('%Y-%m-%d')} {final_title} - 일정표.xlsx"
                     
                     st.session_state.generated_file = output.getvalue()
                     st.session_state.generated_filename = file_name
                     st.session_state.ui_status = "success"
-                    st.session_state.ui_msg = f"선배님! 7대 실무 수배 룰(시간 보정·08:55 해제)을 완벽히 적용하여 생성을 마쳤습니다! 🙇‍♂️✨"
+                    st.session_state.ui_msg = f"선배님! 2행 전용차량 고정 및 도시 중복제거가 완료된 완판본입니다! 🙇‍♂️✨"
                     st.rerun()
 
                 except Exception as e:
