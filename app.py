@@ -32,7 +32,7 @@ if "generated_filename" not in st.session_state:
 if "ui_status" not in st.session_state:
     st.session_state.ui_status = "idle"
 if "ui_msg" not in st.session_state:
-    st.session_state.ui_msg = "선배님! 전 유럽 자동 전환 엔진(발틱/북유럽 백과사전 모드 완비) 세팅 완료되었습니다. 요청해 주세요! ☕"
+    st.session_state.ui_msg = "선배님! 전 유럽 하이브리드 엔진(지역 불일치 오염 방지 가드레일 장착) 세팅 완료되었습니다. 요청해 주세요! ☕"
 if "routing_text_injected" not in st.session_state:
     st.session_state.routing_text_injected = ""
 if "selected_input_mode" not in st.session_state:
@@ -81,13 +81,13 @@ st.caption("실무 완판 규격: 전 유럽 하이브리드 엔진 | 2행 전�
 if render_flight_search_ui:
     render_flight_search_ui()
 
-# 4. 사내 엑셀 DB 목록 스캔
+# 사내 엑셀 DB 목록 스캔
 def get_available_db_files():
     db_folder = "database"
     if not os.path.exists(db_folder): return []
     return [os.path.basename(f) for f in glob.glob(os.path.join(db_folder, "*.xlsx"))]
 
-# 🚨 전 유럽 하이브리드 스마트 DB 매칭 엔진 (타 지역 엑셀 오염 원천 차단)
+# 🚨 전 유럽 하이브리드 스마트 DB 매칭 엔진 (지역 불일치 시 엉뚱한 엑셀 주입 원천 차단)
 def get_target_db_context(user_query: str):
     db_folder = "database"
     excel_files = glob.glob(os.path.join(db_folder, "*.xlsx"))
@@ -97,10 +97,10 @@ def get_target_db_context(user_query: str):
     best_file = None
     best_score = -1
 
-    # 유럽 전 권역 키워드 풀 확장
-    keywords = [
-        "동유럽", "서유럽", "남유럽", "북유럽", "발칸", "발틱", "코카서스",
-        "스페인", "포르투갈", "이탈리아", "스위스", "프랑스", "영국", "스코틀랜드",
+    # 1. 지역 키워드 풀 (현업 실무 축약어 "북발", "동유", "스포" 등 완벽 대응)
+    region_keywords = [
+        "동유럽", "동유", "서유럽", "서유", "남유럽", "북유럽", "북발", "발틱", "코카서스",
+        "스페인", "포르투갈", "스포", "이탈리아", "이태리", "스위스", "프랑스", "영국", "스코틀랜드",
         "독일", "오스트리아", "체코", "헝가리", "크로아티아", "슬로베니아",
         "그리스", "터키", "튀르키예", "노르웨이", "핀란드", "스웨덴", "덴마크",
         "아이슬란드", "에스토니아", "라트비아", "리투아니아", "조지아", "몰타", "네덜란드", "벨기에"
@@ -110,27 +110,37 @@ def get_target_db_context(user_query: str):
         filename = os.path.basename(filepath)
         f_lower = filename.lower()
         score = 0
+        region_matched = False
 
-        for kw in keywords:
-            if kw in q_lower and kw in f_lower:
-                score += 10
+        # 지역 키워드 매칭 여부 우선 검사
+        for kw in region_keywords:
+            if kw in q_lower:
+                # '북발' 요청 시 파일명에 북유럽/발틱 매칭
+                if kw == "북발" and ("북유럽" in f_lower or "발틱" in f_lower):
+                    score += 20
+                    region_matched = True
+                elif kw in f_lower:
+                    score += 20
+                    region_matched = True
 
-        if any(k in q_lower for k in ["ke", "대한항공"]) and any(k in f_lower for k in ["ke", "대한항공"]): score += 5
-        if any(k in q_lower for k in ["tk", "터키항공"]) and any(k in f_lower for k in ["tk", "터키항공"]): score += 5
-        if any(k in q_lower for k in ["oz", "아시아나"]) and any(k in f_lower for k in ["oz", "아시아나"]): score += 3
-        if any(k in q_lower for k in ["ay", "핀에어"]) and any(k in f_lower for k in ["ay", "핀에어"]): score += 5
-        if any(k in q_lower for k in ["lh", "루프트한자"]) and any(k in f_lower for k in ["lh", "루프트한자"]): score += 5
-        if any(k in q_lower for k in ["sk", "스칸디나비아항공"]) and any(k in f_lower for k in ["sk", "스칸디나비아항공"]): score += 5
+        # 🚨 가드레일: 요청 지역과 파일 지역이 맞지 않으면, 항공사(루프트한자, 대한항공 등)가 같아도 점수 합산 절대 금지!
+        if region_matched:
+            if any(k in q_lower for k in ["lh", "루프트한자"]) and any(k in f_lower for k in ["lh", "루프트한자", "fra", "muc"]): score += 5
+            if any(k in q_lower for k in ["ke", "대한항공"]) and any(k in f_lower for k in ["ke", "대한항공"]): score += 5
+            if any(k in q_lower for k in ["tk", "터키항공"]) and any(k in f_lower for k in ["tk", "터키항공"]): score += 5
+            if any(k in q_lower for k in ["oz", "아시아나"]) and any(k in f_lower for k in ["oz", "아시아나"]): score += 3
+            if any(k in q_lower for k in ["sk", "스칸디나비아"]) and any(k in f_lower for k in ["sk", "cph"]): score += 5
+            if any(k in q_lower for k in ["ay", "핀에어"]) and any(k in f_lower for k in ["ay", "hel"]): score += 5
 
-        days_match = re.search(r"(\d+)일", user_query)
-        if days_match and (f"{days_match.group(1)}일" in filename or f"{days_match.group(1)}d" in f_lower):
-            score += 5
+            days_match = re.search(r"(\d+)일", user_query)
+            if days_match and (f"{days_match.group(1)}일" in filename or f"{days_match.group(1)}d" in f_lower):
+                score += 5
 
         if score > best_score:
             best_score = score
             best_file = filepath
 
-    # 🚨 일치하는 DB가 없으면 엉뚱한 첫 번째 파일을 잡지 않고 None 반환 (순수 글로벌 지식 모드 작동)
+    # 지역 일치 파일이 없으면 엉뚱한 파일(스페인/아이슬란드 등)을 잡지 않고 None 반환하여 백과사전 모드 실행
     if not best_file or best_score <= 0:
         return None, ""
 
@@ -184,18 +194,18 @@ with col1:
             st.info("💡 `database/` 폴더에 사내 엑셀이 있을 경우 자동 매핑됩니다.")
 
     start_date = st.date_input("출발일자 선택", datetime.today())
-    tour_title = st.text_input("행사명 (선택)", placeholder="예: 2027-07-12 북유럽 발틱 13일 SK")
+    tour_title = st.text_input("행사명 (선택)", placeholder="예: 2027-07-12 북유럽 발틱 13일 LH")
     
     if "[옵션 A]" in input_mode:
-        quick_prompt = st.text_input("간단 요청 입력", placeholder="예: 북유럽 발틱 13일 SK / 동유럽 9일 TK 프라하인 부다페스트아웃")
+        quick_prompt = st.text_input("간단 요청 입력", placeholder="예: 북유럽 발틱 13일 LH / 동유럽 9일 TK 프라하인 부다페스트아웃")
     else:
         current_injected_val = st.session_state.get("routing_text_injected", "")
         routing_text = st.text_area(
             "루팅 및 일정 입력 (복사-붙여넣기)",
             value=current_injected_val,
             height=280,
-            placeholder="""1. 인천 출발 / [스칸디나비아항공] SK984 ICN 11:20 ➔ CPH 16:30 / 탈린 도착 후 호텔 투숙
-2. 탈린 (구시가지, 툼페아 언덕) 관광 후 파르누 거쳐 리가로 이동 (약 4시간 30분 소요)
+            placeholder="""1. 인천 출발 / [루프트한자] LH713 ICN 11:55 ➔ FRA 18:45 / 빌뉴스 도착 후 호텔 투숙
+2. 빌뉴스 (새벽의 문, 성 안나 교회) 관광 후 트라카이 거쳐 카우나스로 이동 (약 1시간 40분 소요)
 ..."""
         )
 
@@ -242,17 +252,21 @@ with col2:
     if generate_btn:
         if not api_key:
             st.error("설정(Secrets)에서 GEMINI_API_KEY가 등록되지 않았습니다.")
-        elif "[옵션 A]" in input_mode and not quick_prompt.strip():
-            st.warning("간단 요청 내용을 입력해 주세요.")
+        elif "[옵션 A]" in input_mode and not quick_prompt.strip() and not tour_title.strip():
+            st.warning("행사명 또는 간단 요청 내용을 입력해 주세요.")
         elif "[옵션 B]" in input_mode and not routing_text.strip():
             st.warning("루팅 정보를 입력해 주세요.")
         else:
             st.session_state.generated_file = None
-            user_input_text = quick_prompt if "[옵션 A]" in input_mode else routing_text
-            matched_file_name, target_db_context = get_target_db_context(user_input_text)
+            
+            # 🚨 행사명(tour_title)과 요청본문(quick_prompt/routing_text)을 합쳐서 지역을 분석!
+            raw_text_input = quick_prompt if "[옵션 A]" in input_mode else routing_text
+            combined_analysis_text = f"{tour_title} {raw_text_input}".strip()
+            
+            matched_file_name, target_db_context = get_target_db_context(combined_analysis_text)
             
             if matched_file_name:
-                working_msg = f"📚 사내 기준 엑셀 ['{matched_file_name}'] 20줄 핵심 동선을 매칭하여 조립합니다! ⚡"
+                working_msg = f"📚 사내 기준 엑셀 ['{matched_file_name}'] 동선을 매칭하여 조립합니다! ⚡"
             else:
                 working_msg = "🌐 사내 DB 미등록 지역입니다. 김똘망 사원의 전 유럽 전문 지식으로 완벽히 설계합니다! ⚡"
             render_assistant_ui("working", working_msg)
@@ -268,7 +282,8 @@ with col2:
 {target_db_context if target_db_context else "(사내 DB 미등록 지역: 요청된 국가/도시의 완벽한 정통 패키지 동선으로 자체 설계할 것)"}
 
 [사용자 입력 요청]
-{user_input_text}
+행사명: {tour_title}
+세부요청: {raw_text_input}
 
 [🚨 7대 실무 절대 규칙 - 위반 절대 금지]
 1. **도시명 기재 원칙 (중복 도배 절대 금지)**:
