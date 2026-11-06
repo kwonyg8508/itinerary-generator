@@ -1,4 +1,5 @@
 import streamlit as st
+from flight_search import render_flight_search_ui
 import openpyxl
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 from openpyxl.cell.rich_text import CellRichText, TextBlock
@@ -147,6 +148,7 @@ html, body, [class*="css"] {
 """, unsafe_allow_html=True)
 
 st.title("🇪🇺 유럽 일정표 자동 생성 시스템 (Master Edition)")
+render_flight_search_ui()  #
 st.caption("실무 완판 규격: 사내 DB 20줄 초경량화, 503 완전 방지, 명소 부분 볼드 적용 완료")
 
 # 4. database 폴더 내 사내 엑셀 DB 목록 스캔
@@ -260,8 +262,9 @@ with col1:
     else:
         routing_text = st.text_area(
             "루팅 및 일정 입력 (복사-붙여넣기)",
-            height=280,
-            placeholder="""1. 인천/이스탄불/아테네 (TK021 / TK1845 편) 20:45분 아테네 도착
+        value=st.session_state.get("routing_text_injected", ""),
+        height=280,
+        placeholder="""1. 인천/이스탄불/아테네 (TK021 / TK1845 편) 20:45분 아테네 도착
 2. 아테네(관광) - 고린도(관광) - 아테네
 3. 아테네 / 이스탄불 (TK1844 12:50분 도착) 후 이스탄불 시내 관광
 ..."""
