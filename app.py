@@ -32,7 +32,7 @@ if "generated_filename" not in st.session_state:
 if "ui_status" not in st.session_state:
     st.session_state.ui_status = "idle"
 if "ui_msg" not in st.session_state:
-    st.session_state.ui_msg = "선배님! 2행 전용차량 고정 및 도시 중복제거 룰 장착 완료되었습니다. 요청해 주세요! ☕"
+    st.session_state.ui_msg = "선배님! 전 유럽 자동 전환 엔진(발틱/북유럽 백과사전 모드 완비) 세팅 완료되었습니다. 요청해 주세요! ☕"
 if "routing_text_injected" not in st.session_state:
     st.session_state.routing_text_injected = ""
 if "selected_input_mode" not in st.session_state:
@@ -75,18 +75,19 @@ html, body, [class*="css"] { font-family: 'Pretendard', sans-serif; }
 """, unsafe_allow_html=True)
 
 st.title("🇪🇺 유럽 일정표 자동 생성 시스템 (Master Edition)")
-st.caption("실무 완판 규격: 2행 전용차량 고정 | 도시 중복 제거 | 유럽 50개 도시 확장 | 명소 부분 볼드")
+st.caption("실무 완판 규격: 전 유럽 하이브리드 엔진 | 2행 전용차량 고정 | 도시 중복 제거 | 명소 부분 볼드")
 
 # 항공 스케줄 Add-on 렌더링
 if render_flight_search_ui:
     render_flight_search_ui()
 
-# 사내 엑셀 DB 로드
+# 4. 사내 엑셀 DB 목록 스캔
 def get_available_db_files():
     db_folder = "database"
     if not os.path.exists(db_folder): return []
     return [os.path.basename(f) for f in glob.glob(os.path.join(db_folder, "*.xlsx"))]
 
+# 🚨 전 유럽 하이브리드 스마트 DB 매칭 엔진 (타 지역 엑셀 오염 원천 차단)
 def get_target_db_context(user_query: str):
     db_folder = "database"
     excel_files = glob.glob(os.path.join(db_folder, "*.xlsx"))
@@ -96,25 +97,42 @@ def get_target_db_context(user_query: str):
     best_file = None
     best_score = -1
 
+    # 유럽 전 권역 키워드 풀 확장
+    keywords = [
+        "동유럽", "서유럽", "남유럽", "북유럽", "발칸", "발틱", "코카서스",
+        "스페인", "포르투갈", "이탈리아", "스위스", "프랑스", "영국", "스코틀랜드",
+        "독일", "오스트리아", "체코", "헝가리", "크로아티아", "슬로베니아",
+        "그리스", "터키", "튀르키예", "노르웨이", "핀란드", "스웨덴", "덴마크",
+        "아이슬란드", "에스토니아", "라트비아", "리투아니아", "조지아", "몰타", "네덜란드", "벨기에"
+    ]
+    
     for filepath in excel_files:
         filename = os.path.basename(filepath)
         f_lower = filename.lower()
         score = 0
-        for kw in ["동유럽", "서유럽", "터키", "튀르키예", "스페인", "포르투갈", "그리스", "이탈리아", "스위스", "발칸"]:
-            if kw in q_lower and kw in f_lower: score += 10
-        if ("ke" in q_lower or "대한항공" in q_lower) and ("ke" in f_lower or "대한항공" in f_lower): score += 5
-        if ("tk" in q_lower or "터키항공" in q_lower) and ("tk" in f_lower or "터키항공" in f_lower): score += 5
-        if ("oz" in q_lower or "아시아나" in q_lower) and ("oz" in f_lower or "아시아나" in f_lower): score += 3
+
+        for kw in keywords:
+            if kw in q_lower and kw in f_lower:
+                score += 10
+
+        if any(k in q_lower for k in ["ke", "대한항공"]) and any(k in f_lower for k in ["ke", "대한항공"]): score += 5
+        if any(k in q_lower for k in ["tk", "터키항공"]) and any(k in f_lower for k in ["tk", "터키항공"]): score += 5
+        if any(k in q_lower for k in ["oz", "아시아나"]) and any(k in f_lower for k in ["oz", "아시아나"]): score += 3
+        if any(k in q_lower for k in ["ay", "핀에어"]) and any(k in f_lower for k in ["ay", "핀에어"]): score += 5
+        if any(k in q_lower for k in ["lh", "루프트한자"]) and any(k in f_lower for k in ["lh", "루프트한자"]): score += 5
+        if any(k in q_lower for k in ["sk", "스칸디나비아항공"]) and any(k in f_lower for k in ["sk", "스칸디나비아항공"]): score += 5
 
         days_match = re.search(r"(\d+)일", user_query)
-        if days_match and (f"{days_match.group(1)}일" in filename or f"{days_match.group(1)}d" in f_lower): score += 5
+        if days_match and (f"{days_match.group(1)}일" in filename or f"{days_match.group(1)}d" in f_lower):
+            score += 5
 
         if score > best_score:
             best_score = score
             best_file = filepath
 
+    # 🚨 일치하는 DB가 없으면 엉뚱한 첫 번째 파일을 잡지 않고 None 반환 (순수 글로벌 지식 모드 작동)
     if not best_file or best_score <= 0:
-        best_file = excel_files[0]
+        return None, ""
 
     matched_filename = os.path.basename(best_file)
     try:
@@ -131,7 +149,7 @@ def get_target_db_context(user_query: str):
             if len(content_summary) >= 20: break
         return matched_filename, f"=== [사내 표준 핵심 동선(20줄 압축): {matched_filename}] ===\n" + "\n".join(content_summary)
     except Exception:
-        return matched_filename, ""
+        return None, ""
 
 db_file_list = get_available_db_files()
 api_key = st.secrets.get("GEMINI_API_KEY")
@@ -159,25 +177,25 @@ with col1:
             <div class="db-info-box">
                 📚 <b>연동 대기 사내 엑셀 DB ({len(db_file_list)}개):</b><br>
                 {' • '.join([f'`{f}`' for f in db_file_list])}<br>
-                <span style="font-size:11.5px; color:#2563eb;">* 요청에 맞춰 단 1개 엑셀의 핵심 20행만 초경량 전송되어 503 에러를 차단합니다.</span>
+                <span style="font-size:11.5px; color:#2563eb;">* 요청 지역과 일치하는 엑셀만 참조하며, 미등록 지역(발틱/북유럽 등)은 전 유럽 백과사전 모드로 자동 조립됩니다.</span>
             </div>
             """, unsafe_allow_html=True)
         else:
             st.info("💡 `database/` 폴더에 사내 엑셀이 있을 경우 자동 매핑됩니다.")
 
     start_date = st.date_input("출발일자 선택", datetime.today())
-    tour_title = st.text_input("행사명 (선택)", placeholder="예: 2026-12-05 동유럽 9일 TK")
+    tour_title = st.text_input("행사명 (선택)", placeholder="예: 2027-07-12 북유럽 발틱 13일 SK")
     
     if "[옵션 A]" in input_mode:
-        quick_prompt = st.text_input("간단 요청 입력", placeholder="예: 동유럽 9일 TK 프라하인 부다페스트아웃")
+        quick_prompt = st.text_input("간단 요청 입력", placeholder="예: 북유럽 발틱 13일 SK / 동유럽 9일 TK 프라하인 부다페스트아웃")
     else:
         current_injected_val = st.session_state.get("routing_text_injected", "")
         routing_text = st.text_area(
             "루팅 및 일정 입력 (복사-붙여넣기)",
             value=current_injected_val,
             height=280,
-            placeholder="""1. 인천 출발 / [터키항공] TK021 ICN 10:45 ➔ IST 16:45 / 프라하 도착 후 호텔 투숙
-2. 프라하 (카를교, 프라하 성) 관광 후 체스키크룸로프로 이동 (약 2시간 40분 소요)
+            placeholder="""1. 인천 출발 / [스칸디나비아항공] SK984 ICN 11:20 ➔ CPH 16:30 / 탈린 도착 후 호텔 투숙
+2. 탈린 (구시가지, 툼페아 언덕) 관광 후 파르누 거쳐 리가로 이동 (약 4시간 30분 소요)
 ..."""
         )
 
@@ -233,33 +251,43 @@ with col2:
             user_input_text = quick_prompt if "[옵션 A]" in input_mode else routing_text
             matched_file_name, target_db_context = get_target_db_context(user_input_text)
             
-            render_assistant_ui("working", "실무 수배 규격(2행 전용차량 고정 및 도시 중복제거)으로 조립 중입니다! ⚡")
+            if matched_file_name:
+                working_msg = f"📚 사내 기준 엑셀 ['{matched_file_name}'] 20줄 핵심 동선을 매칭하여 조립합니다! ⚡"
+            else:
+                working_msg = "🌐 사내 DB 미등록 지역입니다. 김똘망 사원의 전 유럽 전문 지식으로 완벽히 설계합니다! ⚡"
+            render_assistant_ui("working", working_msg)
             
             with st.spinner("김똘망 사원이 일정표를 신속하게 제작하고 있습니다..."):
                 try:
                     system_prompt = f"""
-당신은 15년 차 유럽 전문 랜드사의 수석 오퍼레이터 김똘망입니다.
-아래 제공된 [선택된 사내 기준 핵심 동선] 및 사용자의 입력을 바탕으로 고객 전달용 완벽한 엑셀 일정표 JSON을 생성하세요.
+당신은 유럽 40개국 전 지역 인센티브 및 단체 패키지 수배 15년 차 수석 오퍼레이터 김똘망입니다.
+사용자의 요청 지역이 사내 기준 동선에 없거나 비어있는 경우, 당신의 전문적인 유럽 지리 및 관광 지식을 100% 발휘하여 요청된 정확한 국가/도시의 완판본 엑셀 일정표 JSON을 생성하세요.
+(절대로 요청과 무관한 다른 국가나 도시의 일정을 섞지 마세요!)
 
 [선택된 사내 기준 핵심 동선]
-{target_db_context if target_db_context else "(표준 랜드사 규격 준수)"}
+{target_db_context if target_db_context else "(사내 DB 미등록 지역: 요청된 국가/도시의 완벽한 정통 패키지 동선으로 자체 설계할 것)"}
 
 [사용자 입력 요청]
 {user_input_text}
 
-[🚨 7대 실무 절대 규칙]
+[🚨 7대 실무 절대 규칙 - 위반 절대 금지]
 1. **도시명 기재 원칙 (중복 도배 절대 금지)**:
    - 도시는 **새로운 도시에 처음 도착했을 때 딱 1번만** city 칸에 기재할 것.
    - 다음 날 아침 첫 번째 행(호텔 조식 행)에 **시작 도시명으로 1회만** 기재할 것.
-   - 같은 도시 안에서 진행되는 관광지(▶), 이동, 호텔 투숙 행에는 city를 **반드시 빈칸("")**으로 둘 것!
+   - 같은 도시 안에서 진행되는 관광지(▶), 시내 이동, 호텔 투숙 행에는 city를 **반드시 빈칸("")**으로 둘 것!
 2. **도시 이동 표기 규격**:
    - 미사여구 없이 반드시 **'[도착도시명]으로 이동 (약 O시간 O분 소요)'** 형식으로 작성.
    - 이동 시간은 구글 기준 시간에 대형버스 안전 여유 **무조건 +30분 합산**.
 3. **'석식 후' 단독 행 전면 삭제**: 투어 종료 후 곧바로 `호텔 투숙 및 휴식`.
-4. **우피치 미술관 제외 & 친퀘테레 1개 마을 제한** 준수.
-5. **항공 및 귀국 시간**: 실제 항공 시간표 그대로 반영. (인천 도착시간 임의 고정 금지)
+4. **특수 지역 예외 룰**:
+   - 피렌체 투어 시 사전 예약 대기가 심한 '우피치 미술관'은 기본 일정에서 **제외** (시내 도보 투어 대체).
+   - 친퀘테레 투어 시 **대표 1개 마을만 방문**.
+5. **항공 및 귀국 시간 규격**:
+   - 1일차 출국편과 귀국 탑승일 편명/시간을 정확히 반영할 것.
+   - **인천 도착 시간**: 08:55로 임의 고정하지 말고, 사용자가 입력한 항공편의 실제 도착시간을 반영할 것.
+   - 마지막 전날 귀국 탑승 후 다음 행은 `schedule="기내 숙박"`, `hotel="HOTEL : 기내 숙박"`.
 6. **관광 명소 부분 볼드**: ` ▶ [설명] **[핵심명소]**` 규격 준수.
-7. **식사/호텔**: 조/중/석 규격 준수, 튀르키예 5성 / 유럽 4성.
+7. **식사 및 호텔**: 조/중/석 룰 준수, 튀르키예 5성 / 그 외 유럽 4성.
 """
 
                     json_schema = {
@@ -341,7 +369,7 @@ with col2:
                     parsed_days = [day_dict[k] for k in sorted(day_dict.keys())]
 
                     # -------------------------------------------------------------
-                    # 💡 실무 정밀 후처리 (2행 전용차량 고정 + 도시명 중복 제거)
+                    # 💡 실무 정밀 후처리 엔진
                     # -------------------------------------------------------------
                     valid_meals = ["호텔식", "현지식", "한   식", "중국식", "기내식", "-"]
                     turkey_keywords = ["이스탄불", "카파도키아", "파묵칼레", "터키", "튀르키예", "안탈리아"]
@@ -359,7 +387,7 @@ with col2:
                             cleaned_rows.append(r)
                         rows = cleaned_rows
 
-                        # 2일차 이후 조식 후 정돈
+                        # 2일차 이후 조식 정돈
                         if d_num > 1 and len(rows) > 0 and d_num != total_days_cnt:
                             first_sc = rows[0].get("schedule", "")
                             if "조식" in first_sc and len(first_sc) > 8:
@@ -368,7 +396,7 @@ with col2:
                                 rows[0]["schedule"] = "호텔 조식 후"
                                 rows.insert(1, {"city": "", "transport": "", "time": "", "schedule": remainder})
 
-                        # 🚨 1. [도시명 중복 제거]: 같은 도시명이 연속되거나 당일 내 중복 표기 방지
+                        # 🚨 1. [도시명 중복 제거]: 같은 날짜 내 중복 표기 방지
                         current_day_cities = set()
                         for idx, r in enumerate(rows):
                             c_val = str(r.get("city") or "").strip()
@@ -378,19 +406,17 @@ with col2:
                                 else:
                                     current_day_cities.add(c_val)
 
-                        # 🚨 2. [전용차량 / 전  일]: 2일차부터 마지막 전날까지 2번째 행(index 1)에 무조건 강제 고정
+                        # 🚨 2. [전용차량 / 전  일]: 2일차부터 마지막 전날까지 무조건 2번째 행(index 1) 고정
                         if 1 < d_num < total_days_cnt and len(rows) > 1:
-                            # 기존 행들의 전용차량/전일 표기 초기화
                             for r in rows:
                                 if r.get("transport") == "전용차량": r["transport"] = ""
                                 if r.get("time") == "전  일": r["time"] = ""
                                 if str(r.get("schedule", "")).startswith("▶"): r["time"] = ""
                             
-                            # 2번째 행(index 1)에 정확히 고정 박기
                             rows[1]["transport"] = "전용차량"
                             rows[1]["time"] = "전  일"
 
-                        # 1일차 공항 ➔ 호텔 이동 행 처리
+                        # 1일차 호텔 이동 행 처리
                         if d_num == 1:
                             for r in rows:
                                 sc = str(r.get("schedule") or "")
@@ -400,7 +426,7 @@ with col2:
 
                         item["rows"] = rows
 
-                        # 식사 정돈
+                        # 식사 정제
                         cleaned_meals = []
                         for m in item.get("meals", []):
                             m_str = str(m or "").strip()
@@ -587,7 +613,9 @@ with col2:
                     st.session_state.generated_file = output.getvalue()
                     st.session_state.generated_filename = file_name
                     st.session_state.ui_status = "success"
-                    st.session_state.ui_msg = f"선배님! 2행 전용차량 고정 및 도시 중복제거가 완료된 완판본입니다! 🙇‍♂️✨"
+                    
+                    success_msg = f"선배님! '{matched_file_name}' 사내 규격으로 완성했습니다! 🙇‍♂️✨" if matched_file_name else "선배님! 전 유럽 백과사전 지식으로 맞춤 완판본을 제작했습니다! 🙇‍♂️✨"
+                    st.session_state.ui_msg = success_msg
                     st.rerun()
 
                 except Exception as e:
