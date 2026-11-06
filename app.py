@@ -32,7 +32,7 @@ if "generated_filename" not in st.session_state:
 if "ui_status" not in st.session_state:
     st.session_state.ui_status = "idle"
 if "ui_msg" not in st.session_state:
-    st.session_state.ui_msg = "선배님! 7대 실무 수배 룰(시간 보정·08:55 해제·우피치 제외) 장착 완료되었습니다! ☕"
+    st.session_state.ui_msg = "선배님! 7대 실무 수배 룰(시간 보정·08:55 해제·동일항공사 매칭) 세팅 완료되었습니다. 요청해 주세요! ☕"
 if "routing_text_injected" not in st.session_state:
     st.session_state.routing_text_injected = ""
 if "selected_input_mode" not in st.session_state:
@@ -231,10 +231,7 @@ col1, col2 = st.columns([1, 1])
 with col1:
     st.subheader("1. 입력 방식 선택")
     
-    # 주입 시 옵션 B로 자동 체크되도록 상태 연동
-    if st.session_state.get("routing_text_injected", "") and st.session_state.selected_input_mode != "[옵션 B] 직접 루팅 입력 (정밀 항공/일정 파싱)":
-        st.session_state.selected_input_mode = "[옵션 B] 직접 루팅 입력 (정밀 항공/일정 파싱)"
-
+    # 상단 검색기에서 일정표 주입 시 [옵션 B] 라디오 버튼으로 자동 연동
     input_mode_options = ["[옵션 A] 간편 단문 요청 (사내 DB 자동 매칭)", "[옵션 B] 직접 루팅 입력 (정밀 항공/일정 파싱)"]
     selected_mode_idx = 1 if st.session_state.selected_input_mode == input_mode_options[1] else 0
 
@@ -260,12 +257,12 @@ with col1:
             st.info("💡 `database/` 폴더에 사내 엑셀이 있을 경우 자동 매핑됩니다.")
 
     start_date = st.date_input("출발일자 선택", datetime.today())
-    tour_title = st.text_input("행사명 (선택)", placeholder="예: 2026-12-05 동유럽 9일 KE")
+    tour_title = st.text_input("행사명 (선택)", placeholder="예: 2026-12-05 동유럽 9일 TK")
     
     if "[옵션 A]" in input_mode:
         quick_prompt = st.text_input(
             "간단 요청 입력",
-            placeholder="예: 동유럽 9일 KE 프라하인 부다페스트아웃 / 이탈리아 일주 9일"
+            placeholder="예: 동유럽 9일 TK 프라하인 부다페스트아웃 / 이탈리아 일주 9일"
         )
     else:
         current_injected_val = st.session_state.get("routing_text_injected", "")
@@ -274,7 +271,7 @@ with col1:
             value=current_injected_val,
             height=280,
             placeholder="""1. 인천 출발 / [터키항공] TK021 ICN 10:45 ➔ IST 16:45 / 프라하 도착 후 호텔 투숙
-2. 프라하 (카를교, 프라하 성) 관광 후 체스키크룸로프로 이동
+2. 프라하 (카를교, 프라하 성) 관광 후 체스키크룸로프로 이동 (약 2시간 40분 소요)
 ..."""
         )
 
@@ -360,17 +357,17 @@ with col2:
 
 [🚨 7대 실무 절대 규칙 - 위반 절대 금지]
 1. **도시 이동 표기 규칙 (가장 중요)**:
-   - 쓸데없는 수식어(아름다운, 고풍스러운 등) 절대 금지!
-   - 반드시 **'[도착도시명]으로 이동 (약 O시간 O분 소요)'** 형식으로만 작성할 것.
+   - 미사여구(수려한, 고풍스러운 등) 절대 사용 금지!
+   - 반드시 **'[도착도시명]으로 이동 (약 O시간 O분 소요)'** 형태로만 작성할 것.
    - 이동 시간은 구글 일반 승용차 기준 시간에서 대형버스 운행을 감안하여 **무조건 +30분 합산**된 시간을 기재할 것.
    - 예: 밀라노 ➔ 베네치아 (구글 3시간) -> `베네치아로 이동 (약 3시간 30분 소요)`
 
 2. **'석식 후' 단독 행 전면 삭제**:
-   - 매일 반복되던 `석식 후` 단독 행은 **절대 작성하지 마세요**.
-   - 관광 투어가 끝나면 바로 `호텔 투숙 및 휴식` 또는 `호텔로 이동 후 휴식`으로 마감하세요.
+   - 매일 일정 끝에 반복되던 `석식 후` 단독 행은 **절대 작성하지 마세요**.
+   - 관광 투어가 끝나면 곧바로 `호텔 투숙 및 휴식` 또는 `호텔로 이동 후 휴식`으로 마감하세요.
 
 3. **이탈리아 투어 필수 예외 룰**:
-   - **우피치 미술관 제외**: 피렌체 투어 시 사전 예약 및 대기시간이 극심한 '우피치 미술관'은 기본 일정에서 **반드시 제외**할 것. (시뇨리아 광장, 두오모 성당 등 시내 중심 투어로 대체)
+   - **우피치 미술관 제외**: 피렌체 투어 시 사전 예약 및 대기시간이 극심한 '우피치 미술관'은 기본 일정에서 **반드시 제외**할 것. (시뇨리아 광장, 두오모 성당 등 시내 중심 도보 투어로 대체)
    - **친퀘테레 1개 마을 제한**: 친퀘테레 투어 시 여러 마을을 돌지 말고 **반드시 대표 1개 마을만 방문** 후 다음 목적지로 이동할 것.
 
 4. **교통편 및 시간 규격화**:
@@ -378,8 +375,8 @@ with col2:
    - 세모표(▶) 관광지 행에는 시간(time)을 빈칸("")으로 비워둘 것.
 
 5. **항공 및 귀국 시간 규칙 (절대 준수)**:
-   - 1일차 출국 및 마지막 전날 귀국 비행기 편명과 시간을 요청 내용 그대로 반영할 것.
-   - **인천 도착 시간**: 마지막 날 인천 도착 시간은 고정하지 말고, **사용자가 입력한 항공편의 실제 도착시간**을 그대로 반영할 것. (입력이 없을 시에만 오전 도착 일반시간 반영)
+   - 1일차 출국 및 마지막 전날 귀국 비행기 편명과 시간을 요청 내용 그대로 정확히 반영할 것.
+   - **인천 도착 시간**: 마지막 날 인천 도착 시간은 08:55로 고정하지 말고, **사용자가 입력한 항공편의 실제 도착시간**을 그대로 반영할 것. (도착시간이 지정되지 않은 경우에만 통상적인 오전 도착시간 반영)
    - 귀국 출발 행 다음 행은 `schedule="기내 숙박"`, `hotel="HOTEL : 기내 숙박"`.
 
 6. **관광 명소 서식 (부분 볼드 처리)**:
@@ -489,7 +486,7 @@ with col2:
                         cleaned_rows = []
                         for r in rows:
                             sc = str(r.get("schedule") or "").strip()
-                            # 쓸데없는 [도시]관광 단독행 및 석식후 제거
+                            # 불필요한 [도시]관광 단독행 및 석식후 제거
                             if re.match(r"^[가-힣a-zA-Z\s]+관광$", sc) and not sc.startswith("▶"):
                                 continue
                             if sc in ["석식 후", "석식후"]:
@@ -579,7 +576,6 @@ with col2:
                         # 마지막 날: 08:55 고정 제거! 실제 항공 도착시간 유지
                         elif d_num == total_days_cnt:
                             orig_time = rows[0].get("time", "") if len(rows) > 0 else ""
-                            # 시간이 없거나 잘못된 포맷일 경우에만 기본 시간 유지
                             final_arr_time = orig_time if re.match(r"^\d{1,2}:\d{2}$", orig_time) else ""
                             
                             item["rows"] = [
