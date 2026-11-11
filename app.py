@@ -27,7 +27,7 @@ st.set_page_config(page_title="유럽 랜드사 일정표 생성기 (Master Edit
 if "generated_file" not in st.session_state: st.session_state.generated_file = None
 if "generated_filename" not in st.session_state: st.session_state.generated_filename = None
 if "ui_status" not in st.session_state: st.session_state.ui_status = "idle"
-if "ui_msg" not in st.session_state: st.session_state.ui_msg = "선배님! 관광지 볼드체 서식 및 4성 호텔 규격이 완벽히 장착되었습니다! ☕"
+if "ui_msg" not in st.session_state: st.session_state.ui_msg = "선배님! 상단 타이틀 테두리 누락분과 항공 데이터 수용부 완벽 마감 완료되었습니다! ☕"
 if "routing_text_injected" not in st.session_state: st.session_state.routing_text_injected = ""
 if "selected_input_mode" not in st.session_state: st.session_state.selected_input_mode = "[옵션 A] 간편 단문 요청 (사내 DB 자동 매칭)"
 
@@ -67,7 +67,7 @@ html, body, [class*="css"] { font-family: 'Pretendard', sans-serif; }
 """, unsafe_allow_html=True)
 
 st.title("🇪🇺 유럽 일정표 자동 생성 시스템 (Master Edition)")
-st.caption("실무 완판 규격: 관광지명 볼드체 | 호텔 4성/5성 자동 분기 | 도시 중복 제거 | 경유편 유지")
+st.caption("실무 완판 규격: 상단 타이틀 테두리 마감 | 항공 정밀 파싱 | 관광지 볼드 | 호텔 4성/5성 분기")
 
 if render_flight_search_ui:
     render_flight_search_ui()
@@ -209,7 +209,7 @@ with col2:
             combined_text = f"{tour_title} {raw_text_input}".strip()
             
             matched_file_name, target_db_context = get_target_db_context(combined_text, use_db=use_db_toggle)
-            render_assistant_ui("working", "관광지 볼드체 서식과 4성 호텔 규격을 적용하여 조립 중입니다! ⚡")
+            render_assistant_ui("working", "상단 타이틀 테두리 마감 및 완판본 틀을 조립 중입니다! ⚡")
             
             with st.spinner("김똘망 사원이 일정표를 신속하게 제작하고 있습니다..."):
                 try:
@@ -368,7 +368,17 @@ with col2:
                     ws.row_dimensions[1].height = 28.0
                     ws.cell(1, 1, full_title).font = font_title
                     ws.cell(1, 1).alignment = align_center
-                    for c in range(1, 8): ws.cell(1, c).fill = fill_title
+                    
+                    # 🚨 [상단 타이틀 테두리 누락 완벽 마감] A1부터 G1까지 전체 외곽선에 두꺼운 테두리 적용
+                    for c in range(1, 8):
+                        cell = ws.cell(1, c)
+                        cell.fill = fill_title
+                        cell.border = Border(
+                            top=med_side, 
+                            bottom=med_side, 
+                            left=med_side if c == 1 else None, 
+                            right=med_side if c == 7 else None
+                        )
                     ws.merge_cells("A1:G1")
                     ws.row_dimensions[2].height = 13.0
                     
@@ -378,6 +388,7 @@ with col2:
                         cell = ws.cell(3, c, headers[c-1])
                         cell.font = font_header
                         cell.alignment = align_center
+                        cell.border = Border(top=med_side, bottom=med_side, left=med_side if c==1 else thin_side, right=med_side if c==7 else thin_side)
                     ws.merge_cells("F3:G3")
                     
                     col_widths = {1: 10.0, 2: 12.75, 3: 11.0, 4: 9.25, 5: 64.25, 6: 3.63, 7: 10.0}
@@ -465,7 +476,7 @@ with col2:
                     st.session_state.generated_file = output.getvalue()
                     st.session_state.generated_filename = f"{start_date.strftime('%Y-%m-%d')} {tour_title.strip() or '유럽투어'} - 일정표.xlsx"
                     st.session_state.ui_status = "success"
-                    st.session_state.ui_msg = "선배님! 관광지 볼드체 및 4성/5성 호텔 규격까지 모두 결합된 최종 완판본입니다! 🙇‍♂️✨"
+                    st.session_state.ui_msg = "선배님! 상단 타이틀 외곽 테두리까지 완벽하게 마감된 최종 마스터 엑셀입니다! 🙇‍♂️✨"
                     st.rerun()
 
                 except Exception as e:
