@@ -27,7 +27,7 @@ st.set_page_config(page_title="유럽 랜드사 일정표 생성기 (Master Edit
 if "generated_file" not in st.session_state: st.session_state.generated_file = None
 if "generated_filename" not in st.session_state: st.session_state.generated_filename = None
 if "ui_status" not in st.session_state: st.session_state.ui_status = "idle"
-if "ui_msg" not in st.session_state: st.session_state.ui_msg = "선배님! 원본 완판본의 도시 중복 제거 및 경유편 표기 틀을 완벽 복구했습니다! ☕"
+if "ui_msg" not in st.session_state: st.session_state.ui_msg = "선배님! 관광지 볼드체 서식 및 4성 호텔 규격이 완벽히 장착되었습니다! ☕"
 if "routing_text_injected" not in st.session_state: st.session_state.routing_text_injected = ""
 if "selected_input_mode" not in st.session_state: st.session_state.selected_input_mode = "[옵션 A] 간편 단문 요청 (사내 DB 자동 매칭)"
 
@@ -67,7 +67,7 @@ html, body, [class*="css"] { font-family: 'Pretendard', sans-serif; }
 """, unsafe_allow_html=True)
 
 st.title("🇪🇺 유럽 일정표 자동 생성 시스템 (Master Edition)")
-st.caption("실무 완판 규격: 도시 중복 제거 완벽 복구 | 경유편 표기 유지 | 2행 전용차량 고정")
+st.caption("실무 완판 규격: 관광지명 볼드체 | 호텔 4성/5성 자동 분기 | 도시 중복 제거 | 경유편 유지")
 
 if render_flight_search_ui:
     render_flight_search_ui()
@@ -209,7 +209,7 @@ with col2:
             combined_text = f"{tour_title} {raw_text_input}".strip()
             
             matched_file_name, target_db_context = get_target_db_context(combined_text, use_db=use_db_toggle)
-            render_assistant_ui("working", "도시 중복 제거 및 경유편 표기 틀을 복구하여 조립 중입니다! ⚡")
+            render_assistant_ui("working", "관광지 볼드체 서식과 4성 호텔 규격을 적용하여 조립 중입니다! ⚡")
             
             with st.spinner("김똘망 사원이 일정표를 신속하게 제작하고 있습니다..."):
                 try:
@@ -232,14 +232,14 @@ with col2:
    - 시내 관광 중 걷는 것은 교통편에 적지 않으며, 교통편 칸을 빈칸("")으로 비워두세요.
 3. **'전용차량 / 전  일' 2행 고정 및 반복 금지**:
    - 2일차부터 차량 투어 시작 시 **2번째 행(index 1)에만** `transport="전용차량"`, `time="전  일"`을 고정하고, 이후 다른 교통수단(페리, 국내선 등)이 나오기 전까지는 반복 표기하지 마세요.
-4. **공항 상세 명칭 간소화**:
-   - 아테네/로마 국제공항 도착 등 간결하게 작성하세요.
-5. **이동 양식 통일**:
-   - 도시 간 이동은 반드시 **'[도착도시명]으로 이동 (약 O시간 O분 소요)'** 형식으로만 작성하세요. (구글 승용차 기준 시간에 대형버스 감안 +30분 자동 합산)
-6. **식사 내용 일정 칸 기재 원천 차단**:
-   - 일정(schedule) 텍스트 안에 `중식 (현지식)`, `석식` 같은 식사 종류를 절대 적지 마세요. 식사는 우측 식사 칸(조/중/석)에서만 관리합니다.
-7. **IN/OUT 도시 고정 및 7대 수배 룰 준수**:
-   - 지정된 IN/OUT 도시는 절대 변경 금지. 우피치 미술관 제외, 친퀘테레 1개 마을 제한 준수. 마지막 전날 `기내 숙박`.
+4. **관광 명소 부분 볼드체 서식 (매우 중요)**:
+   - 관광지 설명 행은 반드시 **`▶ [설명] **[핵심명소]**`** 형식을 준수하여 핵심 명소 이름에 마크다운 볼드(`**`)를 적용하세요.
+5. **호텔 명기 규칙**:
+   - 튀르키예 지역은 `HOTEL : ANY 5* HOTEL CLASS`, 그 외 유럽 지역(그리스, 이탈리아, 발틱 등)은 무조건 **`HOTEL : ANY 4* HOTEL CLASS`**로 표기하세요.
+6. **이동 양식 통일**:
+   - 도시 간 이동은 반드시 **'[도착도시명]으로 이동 (약 O시간 O분 소요)'** 형식으로만 작성하세요.
+7. **식사 내용 일정 칸 기재 원천 차단**:
+   - 일정(schedule) 텍스트 안에 식사 종류를 적지 말고 우측 식사 칸(조/중/석)에서만 관리하세요.
 """
 
                     json_schema = {
@@ -296,11 +296,12 @@ with col2:
                     parsed_days = [day_dict[k] for k in sorted(day_dict.keys())]
                     total_days_cnt = len(parsed_days)
 
+                    turkey_keywords = ["이스탄불", "카파도키아", "파묵칼레", "터키", "튀르키예", "안탈리아"]
+
                     for item in parsed_days:
                         d_num = item["day"]
                         rows = item["rows"]
                         
-                        # 도보 행 및 일정 칸 내부 식사 문구 필터링
                         cleaned_rows = []
                         for r in rows:
                             sc = str(r.get("schedule") or "").strip()
@@ -310,8 +311,7 @@ with col2:
                             cleaned_rows.append(r)
                         rows = cleaned_rows
 
-                        # 🚨 [도시명 중복 도배 방지 후처리 로직 강화]
-                        # 같은 날짜 안에서 이미 등장한 도시는 2번째 행부터 빈칸("")으로 확실히 밀어냄
+                        # 도시명 중복 도배 방지 후처리
                         seen_cities_in_day = set()
                         for r in rows:
                             c_val = str(r.get("city") or "").strip()
@@ -332,6 +332,16 @@ with col2:
 
                         item["rows"] = rows
 
+                        # 호텔 규격 자동 분기 (튀르키예 5성 / 그 외 유럽 4성)
+                        if d_num == total_days_cnt - 1:
+                            item["hotel"] = "HOTEL : 기내 숙박"
+                        elif d_num == total_days_cnt:
+                            item["hotel"] = ""
+                        else:
+                            all_text = " ".join([r.get("schedule", "") + " " + str(r.get("city", "")) for r in rows])
+                            is_turkey = any(tk in all_text for tk in turkey_keywords)
+                            item["hotel"] = "HOTEL : ANY 5* HOTEL CLASS" if is_turkey else "HOTEL : ANY 4* HOTEL CLASS"
+
                     # 엑셀 빌드
                     wb = openpyxl.Workbook()
                     ws = wb.active
@@ -343,6 +353,9 @@ with col2:
                     font_body = Font(name="맑은 고딕", size=9)
                     font_bold = Font(name="맑은 고딕", size=9, bold=True)
                     font_notice_red = Font(name="맑은 고딕", size=11, bold=True, color="FF0000")
+                    
+                    in_font_regular = InlineFont(rFont="맑은 고딕", sz=9.0, b=False)
+                    in_font_bold = InlineFont(rFont="맑은 고딕", sz=9.0, b=True)
                     
                     fill_title = PatternFill(start_color="FFFFCC", end_color="FFFFCC", fill_type="solid")
                     fill_hotel = PatternFill(start_color="EFEFEF", end_color="EFEFEF", fill_type="solid")
@@ -411,10 +424,28 @@ with col2:
                                 
                             cell_sc = ws.cell(r, 5)
                             cell_sc.alignment = align_mid_left
-                            cell_sc.value = sc_text
+                            
+                            # 관광지명 부분 볼드체 파싱 적용
+                            if sc_text.strip().startswith("▶"):
+                                bold_match = re.search(r"^(.*?)\*\*(.+?)\*\*(.*)$", sc_text)
+                                if bold_match:
+                                    p_txt, b_txt, s_txt = bold_match.group(1), bold_match.group(2), bold_match.group(3)
+                                    rich_elems = []
+                                    if p_txt: rich_elems.append(TextBlock(in_font_regular, p_txt))
+                                    if b_txt: rich_elems.append(TextBlock(in_font_bold, b_txt))
+                                    if s_txt: rich_elems.append(TextBlock(in_font_regular, s_txt))
+                                    cell_sc.value = CellRichText(rich_elems)
+                                else:
+                                    cell_sc.value = sc_text
+                                    cell_sc.font = font_body
+                            else:
+                                cell_sc.value = sc_text
+                                cell_sc.font = font_body
                         
                         if has_hotel:
-                            ws.cell(cur_row + total_rows - 1, 5, hotel_str).font = font_bold
+                            h_cell = ws.cell(cur_row + total_rows - 1, 5, hotel_str)
+                            h_cell.font = font_bold
+                            h_cell.alignment = align_mid_left
                         
                         for m_idx in range(3):
                             ws.cell(cur_row + m_idx, 6, ["조", "중", "석"][m_idx]).alignment = align_center
@@ -434,7 +465,7 @@ with col2:
                     st.session_state.generated_file = output.getvalue()
                     st.session_state.generated_filename = f"{start_date.strftime('%Y-%m-%d')} {tour_title.strip() or '유럽투어'} - 일정표.xlsx"
                     st.session_state.ui_status = "success"
-                    st.session_state.ui_msg = "선배님! 도시 중복 제거와 경유편 안내가 포함된 원본 완판본 틀로 완벽 복구되었습니다! 🙇‍♂️✨"
+                    st.session_state.ui_msg = "선배님! 관광지 볼드체 및 4성/5성 호텔 규격까지 모두 결합된 최종 완판본입니다! 🙇‍♂️✨"
                     st.rerun()
 
                 except Exception as e:
