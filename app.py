@@ -27,7 +27,7 @@ st.set_page_config(page_title="유럽 랜드사 일정표 생성기 (Master Edit
 if "generated_file" not in st.session_state: st.session_state.generated_file = None
 if "generated_filename" not in st.session_state: st.session_state.generated_filename = None
 if "ui_status" not in st.session_state: st.session_state.ui_status = "idle"
-if "ui_msg" not in st.session_state: st.session_state.ui_msg = "선배님! 항공/루팅 최우선 원칙(DB 참고용 전환) 및 완판본 서식 엔진 장착 완료되었습니다! ☕"
+if "ui_msg" not in st.session_state: st.session_state.ui_msg = "선배님! 야간 비행기 시간 및 2일차 새벽 도착 분기 로직이 장착되었습니다! ☕"
 if "routing_text_injected" not in st.session_state: st.session_state.routing_text_injected = ""
 if "selected_input_mode" not in st.session_state: st.session_state.selected_input_mode = "[옵션 A] 간편 단문 요청"
 
@@ -67,7 +67,7 @@ html, body, [class*="css"] { font-family: 'Pretendard', sans-serif; }
 """, unsafe_allow_html=True)
 
 st.title("🇪🇺 유럽 일정표 자동 생성 시스템 (Master Edition)")
-st.caption("실무 완판 규격: 항공·루팅 1순위 절대 사수 | 편명 교통편 칸 배치 | 관광지 볼드 | 호텔 4성/5성 분기")
+st.caption("실무 완판 규격: 야간 비행기 정밀 시간 사수 | 편명 교통편 칸 배치 | 관광지 볼드 | 호텔 4성/5성 분기")
 
 if render_flight_search_ui:
     render_flight_search_ui()
@@ -89,13 +89,12 @@ def get_available_db_files():
     if not os.path.exists(db_folder): return []
     return [os.path.basename(f) for f in glob.glob(os.path.join(db_folder, "*.xlsx"))]
 
-# 💡 [사내 DB 역할 전환] 강제 매칭용이 아닌, 신입사원 참고용(가이드북)으로만 가볍게 스니펫 제공
 def get_reference_db_context(user_query: str):
     db_folder = "database"
     excel_files = glob.glob(os.path.join(db_folder, "*.xlsx"))
     if not excel_files: return "", ""
     q_lower = user_query.lower()
-    best_file = next((f for f in excel_files if any(kw in q_lower for kw in ["그리스", "로마", "이탈리아", "발틱", "북유럽", "동유럽", "스페인"])), excel_files[0])
+    best_file = next((f for f in excel_files if any(kw in q_lower for kw in ["노르웨이", "발틱", "핀에어", "북유럽", "그리스", "로마", "이탈리아"])), excel_files[0])
     matched_filename = os.path.basename(best_file)
     try:
         wb = openpyxl.load_workbook(best_file, data_only=True)
@@ -125,10 +124,10 @@ with col1:
     st.session_state.selected_input_mode = input_mode
 
     start_date = st.date_input("출발일자 선택", datetime.today())
-    tour_title = st.text_input("행사명 (선택)", placeholder="예: 그리스 아테네, 로마 성지순례 10일 QR")
+    tour_title = st.text_input("행사명 (선택)", placeholder="예: 똘망투어) 노르웨이, 발틱 11일 AY")
     
     if "[옵션 A]" in input_mode:
-        quick_prompt = st.text_input("간단 요청 / 웹 URL 입력", placeholder="예: 그리스 아테네 인, 로마 아웃 10일 카타르항공 QR")
+        quick_prompt = st.text_input("간단 요청 / 웹 URL 입력", placeholder="예: 노르웨이 발틱 11일 핀에어 AY")
     else:
         current_injected_val = st.session_state.get("routing_text_injected", "")
         routing_text = st.text_area("루팅 및 일정 입력 / 웹 URL", value=current_injected_val, height=280)
@@ -168,14 +167,13 @@ with col2:
             combined_text = f"{tour_title} {raw_text_input}".strip()
             
             ref_filename, ref_context = get_reference_db_context(combined_text)
-            render_assistant_ui("working", "사용자 항공/루팅을 1순위로 반영하여 정밀 조립 중입니다! ⚡")
+            render_assistant_ui("working", "야간 비행기 출도착 시간과 편명을 완벽하게 반영하여 조립 중입니다! ⚡")
             
             with st.spinner("김똘망 사원이 일정표를 신속하게 제작하고 있습니다..."):
                 try:
                     system_prompt = f"""
 당신은 유럽 단체 패키지 수배 15년 차 수석 오퍼레이터 김똘망입니다.
-아래 [사용자 입력 및 항공 루팅]을 최우선 절대 법전으로 삼아 고객 전달용 완벽한 엑셀 일정표 JSON을 생성하세요. 
-(사내 DB나 참고용 가이드북은 표현 방식 참고용일 뿐, 사용자가 지정한 IN 도시와 항공 스케줄을 절대 덮어씌우지 마세요.)
+아래 [사용자 입력 및 항공 루팅]을 최우선 절대 법전으로 삼아 고객 전달용 완벽한 엑셀 일정표 JSON을 생성하세요.
 
 [사용자 입력 및 항공 루팅 (1순위 절대 반영)]
 행사명: {tour_title}
@@ -185,18 +183,18 @@ with col2:
 {ref_context if ref_context else "(없음)"}
 
 [🚨 랜드사 실무 절대 규칙 - 위반 절대 금지]
-1. **사용자 입력 항공/루팅 절대 사수**:
-   - 사용자가 요청한 IN 도시(예: 그리스 아테네)와 OUT 도시를 철저히 반영하여 첫날과 마지막 날 동선을 설계하세요. (사내 DB 내용 때문에 임의로 데살로니키 등 엉뚱한 도시로 바꾸기 절대 금지!)
-   - 편명(예: `QR859`, `EK323`)은 일정(schedule) 텍스트에 넣지 말고, 반드시 **교통편(`transport`) 칸에 단독으로 기재**하세요.
-   - 미팅, 출국, 환승/대기, 현지 공항 도착 등 모든 항공 행에는 정확한 시간(`HH:MM`)을 `time` 필드에 기재하세요.
+1. **야간 비행기 및 항공 시간/편명 정밀 반영 (매우 중요)**:
+   - 사용자가 입력하거나 주입한 항공편명(예: `AY42`, `AY911` 등)과 **정확한 시각(예: 23:00 출발, 07:55 도착 등)**을 그대로 반영하세요.
+   - 밤 11시(23:00) 등 야간 출발 비행기인 경우, 1일차 밤에 인천 출발 행을 넣고, **2일차 새벽/아침에 헬싱키 경유 및 최종 목적지(오슬로 등) 도착 및 가이드 미팅 행**이 정확히 오도록 하세요. (낮 시간대로 임의 변경 금지!)
+   - 편명은 교통편(`transport`) 칸에 단독으로 기재하고, 시간(`time`) 칸에는 정확한 `HH:MM`을 기재하세요.
 2. **도보 이동수단 전면 삭제**:
    - 시내 관광 중 걷는 것은 교통편에 적지 않으며, 교통편 칸을 빈칸("")으로 비워두세요.
 3. **'전용차량 / 전  일' 2행 고정 및 반복 금지**:
-   - 2일차부터 차량 투어 시작 시 **2번째 행(index 1)에만** `transport="전용차량"`, `time="전  일"`을 고정하고, 이후 다른 교통수단(페리, 국내선 등)이 나오기 전까지는 반복 표기하지 마세요.
+   - 2일차부터 차량 투어 시작 시 **2번째 행(index 1)에만** `transport="전용차량"`, `time="전  일"`을 고정하고, 이후 다른 교통수단(페리, 국내선 등)이 나오기 전까지는 반복 표기하지 마세요. (단, 항공 출도착 시간이 들어가는 행은 시간이 우선이므로 '전 일' 대신 시간을 넣으세요.)
 4. **관광 명소 부분 볼드체 서식 (매우 중요)**:
    - 관광지 설명 행은 반드시 **`▶ [설명] **[핵심명소]**`** 형식을 준수하여 핵심 명소 이름에 마크다운 볼드(`**`)를 적용하세요.
 5. **호텔 명기 규칙**:
-   - 튀르키예 지역은 `HOTEL : ANY 5* HOTEL CLASS`, 그 외 유럽 지역(그리스, 이탈리아, 발틱 등)은 무조건 **`HOTEL : ANY 4* HOTEL CLASS`**로 표기하세요.
+   - 튀르키예 지역은 `HOTEL : ANY 5* HOTEL CLASS`, 그 외 유럽 지역(그리스, 이탈리아, 발틱, 북유럽 등)은 무조건 **`HOTEL : ANY 4* HOTEL CLASS`**로 표기하세요.
 6. **이동 양식 통일**:
    - 도시 간 이동은 반드시 **'[도착도시명]으로 이동 (약 O시간 O분 소요)'** 형식으로만 작성하세요.
 7. **식사 내용 일정 칸 기재 원천 차단**:
@@ -437,7 +435,7 @@ with col2:
                     st.session_state.generated_file = output.getvalue()
                     st.session_state.generated_filename = f"{start_date.strftime('%Y-%m-%d')} {tour_title.strip() or '유럽투어'} - 일정표.xlsx"
                     st.session_state.ui_status = "success"
-                    st.session_state.ui_msg = "선배님! 사용자 항공/루팅 1순위 반영 및 완판본 서식이 적용된 최종 완성본입니다! 🙇‍♂️✨"
+                    st.session_state.ui_msg = "선배님! 야간 비행기 시간이 1~2일차에 정확히 분기되어 반영된 완판본입니다! 🙇‍♂️✨"
                     st.rerun()
 
                 except Exception as e:
