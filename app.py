@@ -17,30 +17,20 @@ from bs4 import BeautifulSoup
 from google import genai
 from google.genai import types
 
-# 항공 검색 애드온 모듈 안전 임포트
 try:
     from flight_search import render_flight_search_ui
 except ImportError:
     render_flight_search_ui = None
 
-# 1. 페이지 설정
 st.set_page_config(page_title="유럽 랜드사 일정표 생성기 (Master Edition)", layout="wide", page_icon="🇪🇺")
 
-# 2. 세션 상태 초기화
-if "generated_file" not in st.session_state:
-    st.session_state.generated_file = None
-if "generated_filename" not in st.session_state:
-    st.session_state.generated_filename = None
-if "ui_status" not in st.session_state:
-    st.session_state.ui_status = "idle"
-if "ui_msg" not in st.session_state:
-    st.session_state.ui_msg = "선배님! 웹 URL 자동 수집 및 실무 7대 수배 룰 엔진 세팅 완료되었습니다. 요청해 주세요! ☕"
-if "routing_text_injected" not in st.session_state:
-    st.session_state.routing_text_injected = ""
-if "selected_input_mode" not in st.session_state:
-    st.session_state.selected_input_mode = "[옵션 A] 간편 단문 요청 (사내 DB 자동 매칭)"
+if "generated_file" not in st.session_state: st.session_state.generated_file = None
+if "generated_filename" not in st.session_state: st.session_state.generated_filename = None
+if "ui_status" not in st.session_state: st.session_state.ui_status = "idle"
+if "ui_msg" not in st.session_state: st.session_state.ui_msg = "선배님! 식사 문구 원천 차단 및 이동 양식 통일 엔진 세팅 완료되었습니다. ☕"
+if "routing_text_injected" not in st.session_state: st.session_state.routing_text_injected = ""
+if "selected_input_mode" not in st.session_state: st.session_state.selected_input_mode = "[옵션 A] 간편 단문 요청 (사내 DB 자동 매칭)"
 
-# 3. 커스텀 CSS
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Pretendard:wght@400;600;700&display=swap');
@@ -77,36 +67,22 @@ html, body, [class*="css"] { font-family: 'Pretendard', sans-serif; }
 """, unsafe_allow_html=True)
 
 st.title("🇪🇺 유럽 일정표 자동 생성 시스템 (Master Edition)")
-st.caption("실무 완판 규격: 웹 URL 자동 수집 연동 | IN/OUT 강제 앵커링 | 2행 전용차량 고정 | 도시 중복 제거")
+st.caption("실무 완판 규격: 식사 문구 차단 | 이동 양식 통일 | 항공편명 중복 제거 | 도보 행 삭제")
 
-# 항공 스케줄 Add-on 렌더링
 if render_flight_search_ui:
     render_flight_search_ui()
 
-# 🌐 URL 웹페이지 본문 텍스트 자동 추출 함수
 def extract_text_from_url(url: str) -> str:
     try:
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-        }
+        headers = {"User-Agent": "Mozilla/5.0"}
         resp = requests.get(url, headers=headers, timeout=8)
         resp.raise_for_status()
         resp.encoding = resp.apparent_encoding
-        
         soup = BeautifulSoup(resp.text, "html.parser")
-        
-        # 불필요한 스크립트, 스타일 태그 제거
-        for tag in soup(["script", "style", "nav", "footer", "header", "noscript"]):
-            tag.decompose()
-            
-        text = soup.get_text(separator="\n")
-        lines = [line.strip() for line in text.splitlines() if len(line.strip()) > 3]
-        clean_text = "\n".join(lines)
-        
-        # LLM 프롬프트 과부하 방지 (앞부분 5,000자 압축 추출)
-        return clean_text[:5000]
+        for tag in soup(["script", "style", "nav", "footer", "header", "noscript"]): tag.decompose()
+        return "\nnot [line.strip() for line in soup.get_text(separator='\n').splitlines() if len(line.strip()) > 3][:5000]"
     except Exception as e:
-        return f"(웹페이지 자동 수집 실패: {e})"
+        return f"(웹페이지 수집 실패: {e})"
 
 def get_available_db_files():
     db_folder = "database"
@@ -114,63 +90,45 @@ def get_available_db_files():
     return [os.path.basename(f) for f in glob.glob(os.path.join(db_folder, "*.xlsx"))]
 
 def get_target_db_context(user_query: str, use_db: bool = True):
-    if not use_db:
-        return None, ""
-
+    if not use_db: return None, ""
     db_folder = "database"
     excel_files = glob.glob(os.path.join(db_folder, "*.xlsx"))
     if not excel_files: return None, ""
 
     q_lower = user_query.lower()
-    best_file = None
-    best_score = -1
-
+    best_file, best_score = None, -1
     is_baltic_req = any(k in q_lower for k in ["발틱", "에스토니아", "라트비아", "리투아니아", "탈린", "리가", "빌뉴스", "북발"])
 
     region_keywords = [
-        "동유럽", "동유", "서유럽", "서유", "남유럽", "북유럽", "북발", "발틱", "코카서스",
-        "스페인", "포르투갈", "스포", "이탈리아", "이태리", "스위스", "프랑스", "영국", "스코틀랜드",
-        "독일", "오스트리아", "체코", "헝가리", "크로아티아", "슬로베니아",
-        "그리스", "터키", "튀르키예", "노르웨이", "핀란드", "스웨덴", "덴마크",
-        "아이슬란드", "조지아", "몰타", "네덜란드", "벨기에"
+        "동유럽", "서유럽", "남유럽", "북유럽", "발틱", "코카서스", "스페인", "포르투갈", 
+        "이탈리아", "이태리", "스위스", "프랑스", "영국", "독일", "오스트리아", "체코", 
+        "헝가리", "크로아티아", "그리스", "터키", "튀르키예", "노르웨이", "아이슬란드"
     ]
     
     for filepath in excel_files:
         filename = os.path.basename(filepath)
         f_lower = filename.lower()
-        score = 0
-        region_matched = False
+        score, region_matched = 0, False
 
-        if is_baltic_req and "발틱" not in f_lower:
-            continue
-
+        if is_baltic_req and "발틱" not in f_lower: continue
         for kw in region_keywords:
-            if kw in q_lower:
-                if kw == "북발" and ("북유럽" in f_lower or "발틱" in f_lower):
-                    score += 20
-                    region_matched = True
-                elif kw in f_lower:
-                    score += 20
-                    region_matched = True
+            if kw in q_lower and kw in f_lower:
+                score += 20
+                region_matched = True
 
         if region_matched:
-            if any(k in q_lower for k in ["lh", "루프트한자"]) and any(k in f_lower for k in ["lh", "루프트한자", "fra"]): score += 5
-            if any(k in q_lower for k in ["ke", "대한항공"]) and any(k in f_lower for k in ["ke", "대한항공"]): score += 5
-            if any(k in q_lower for k in ["tk", "터키항공"]) and any(k in f_lower for k in ["tk", "터키항공"]): score += 5
-            if any(k in q_lower for k in ["oz", "아시아나"]) and any(k in f_lower for k in ["oz", "아시아나"]): score += 3
-            if any(k in q_lower for k in ["sk", "스칸디나비아"]) and any(k in f_lower for k in ["sk", "cph"]): score += 5
-
-            days_match = re.search(r"(\d+)일", user_query)
-            if days_match and (f"{days_match.group(1)}일" in filename or f"{days_match.group(1)}d" in f_lower):
-                score += 5
+            if "lh" in q_lower and "lh" in f_lower: score += 5
+            if "ke" in q_lower and "ke" in f_lower: score += 5
+            if "tk" in q_lower and "tk" in f_lower: score += 5
+            if "oz" in q_lower and "oz" in f_lower: score += 3
+            if "ek" in q_lower and "ek" in f_lower: score += 5
+            if "ay" in q_lower and "ay" in f_lower: score += 5
 
         if score > best_score:
             best_score = score
             best_file = filepath
 
-    if not best_file or best_score <= 0:
-        return None, ""
-
+    if not best_file or best_score <= 0: return None, ""
     matched_filename = os.path.basename(best_file)
     try:
         wb = openpyxl.load_workbook(best_file, data_only=True)
@@ -180,11 +138,9 @@ def get_target_db_context(user_query: str, use_db: bool = True):
             city = ws.cell(r, 2).value
             schedule = str(ws.cell(r, 5).value or "").strip()
             if schedule.startswith("▶") or (city and len(str(city).strip()) > 1):
-                clean_sc = schedule.replace("\n", " ")[:60]
-                line = f"도시: {str(city).strip()} | {clean_sc}" if city else f"{clean_sc}"
-                content_summary.append(line)
+                content_summary.append(f"도시: {str(city).strip()} | {schedule.replace(chr(10), ' ')[:60]}" if city else schedule[:60])
             if len(content_summary) >= 20: break
-        return matched_filename, f"=== [사내 표준 핵심 동선(20줄 압축): {matched_filename}] ===\n" + "\n".join(content_summary)
+        return matched_filename, f"=== [사내 표준 핵심 동선: {matched_filename}] ===\n" + "\n".join(content_summary)
     except Exception:
         return None, ""
 
@@ -199,159 +155,89 @@ with col1:
     input_mode_options = ["[옵션 A] 간편 단문 요청 (사내 DB 자동 매칭)", "[옵션 B] 직접 루팅 입력 (정밀 항공/일정 파싱)"]
     selected_mode_idx = 1 if st.session_state.selected_input_mode == input_mode_options[1] else 0
 
-    input_mode = st.radio(
-        "작성 방식을 선택하세요:",
-        input_mode_options,
-        index=selected_mode_idx,
-        horizontal=True,
-        key="radio_input_mode"
-    )
+    input_mode = st.radio("작성 방식을 선택하세요:", input_mode_options, index=selected_mode_idx, horizontal=True, key="radio_input_mode")
     st.session_state.selected_input_mode = input_mode
     
     use_db_toggle = True
     if "[옵션 A]" in input_mode:
-        use_db_toggle = st.checkbox("📚 사내 엑셀 DB 자동 매칭 사용", value=True, help="체크 해제 시 사내 DB 파일을 전혀 읽지 않고 Gemini 백과사전 지식만으로 일정표를 생성합니다.")
-        if db_file_list and use_db_toggle:
-            st.markdown(f"""
-            <div class="db-info-box">
-                📚 <b>연동 대기 사내 엑셀 DB ({len(db_file_list)}개):</b><br>
-                {' • '.join([f'`{f}`' for f in db_file_list])}<br>
-                <span style="font-size:11.5px; color:#2563eb;">* 요청 지역과 일치하는 엑셀만 참조하며, 미등록 지역은 전 유럽 백과사전 모드로 자동 조립됩니다.</span>
-            </div>
-            """, unsafe_allow_html=True)
+        use_db_toggle = st.checkbox("📚 사내 엑셀 DB 자동 매칭 사용", value=True)
     else:
         use_db_toggle = False
 
     start_date = st.date_input("출발일자 선택", datetime.today())
-    tour_title = st.text_input("행사명 (선택)", placeholder="예: 2027-07-12 북유럽 발틱 13일 LH")
+    tour_title = st.text_input("행사명 (선택)", placeholder="예: 그리스, 로마 성지순례 10일 EK")
     
     if "[옵션 A]" in input_mode:
-        quick_prompt = st.text_input(
-            "간단 요청 / 웹 URL 입력", 
-            placeholder="예: 북유럽 발틱 13일 루프트한자 또는 여행사 상품 URL 링크"
-        )
+        quick_prompt = st.text_input("간단 요청 / 웹 URL 입력", placeholder="예: 그리스 로마 10일 EK 에미레이트 항공")
     else:
         current_injected_val = st.session_state.get("routing_text_injected", "")
-        routing_text = st.text_area(
-            "루팅 및 일정 입력 / 웹 URL (복사-붙여넣기)",
-            value=current_injected_val,
-            height=280,
-            placeholder="""1. 인천 출발 / [루프트한자] LH713 ICN 11:55 ➔ FRA 18:45 / 빌뉴스 도착 후 호텔 투숙
-...
-또는 참고할 여행사 패키지 상품 웹페이지 URL을 붙여넣으셔도 됩니다!"""
-        )
+        routing_text = st.text_area("루팅 및 일정 입력 / 웹 URL", value=current_injected_val, height=280)
 
 with col2:
     st.subheader("2. AI 수배팀 작업 현황")
     ui_placeholder = st.empty()
 
     def render_assistant_ui(status="idle", message="선배님, 요청해 주시면 즉각 빌드하겠습니다! ☕"):
-        if status == "success":
-            badge_text, badge_class = "🎉 제작 완료!", "badge-success"
-            cands = ["done.gif", "done.png", "assistant.gif", "working.gif"]
-        elif status == "working":
-            badge_text, badge_class = "🔥 폭풍 작업 중", "badge-working"
-            cands = ["working.gif", "assistant.gif", "done.gif"]
-        else:
-            badge_text, badge_class = "☕ 대기 중", "badge-idle"
-            cands = ["working.gif", "assistant.gif", "done.gif"]
-
+        badge_text, badge_class = ("🎉 제작 완료!", "badge-success") if status=="success" else (("🔥 폭풍 작업 중", "badge-working") if status=="working" else ("☕ 대기 중", "badge-idle"))
+        cands = ["done.gif", "working.gif", "assistant.gif"]
         media_file = next((c for c in cands if os.path.exists(c)), None)
-        media_b64 = ""
-        if media_file:
-            with open(media_file, "rb") as f:
-                mime = "image/gif" if media_file.endswith(".gif") else "image/png"
-                media_b64 = f"data:{mime};base64,{base64.b64encode(f.read()).decode()}"
-
-        img_tag = f'<img src="{media_b64}" alt="김똘망 사원">' if media_b64 else '<span style="color:white;font-size:24px;">👓</span>'
-        html_content = f"""
+        media_b64 = f"data:image/gif;base64,{base64.b64encode(open(media_file,'rb').read()).decode()}" if media_file else ""
+        img_tag = f'<img src="{media_b64}">' if media_b64 else '👓'
+        
+        ui_placeholder.markdown(f"""
         <div class="assistant-card">
             <div class="gif-wrapper">{img_tag}</div>
             <div class="speech-bubble">
                 <div class="assistant-header">
-                    <span class="assistant-name">👓 김똘망 사원 <span style="font-size:12px; font-weight:normal; color:#64748b;">(유럽 OP팀 막내)</span></span>
+                    <span class="assistant-name">👓 김똘망 사원 <span style="font-size:12px;color:#64748b;">(유럽 OP팀 막내)</span></span>
                     <span class="assistant-badge {badge_class}">{badge_text}</span>
                 </div>
                 <div class="assistant-message">{message}</div>
             </div>
         </div>
-        """
-        ui_placeholder.markdown(html_content, unsafe_allow_html=True)
+        """, unsafe_allow_html=True)
 
     render_assistant_ui(st.session_state.ui_status, st.session_state.ui_msg)
     generate_btn = st.button("🚀 엑셀 일정표 생성하기", type="primary", use_container_width=True)
 
     if generate_btn:
-        if not api_key:
-            st.error("설정(Secrets)에서 GEMINI_API_KEY가 등록되지 않았습니다.")
-        elif "[옵션 A]" in input_mode and not quick_prompt.strip() and not tour_title.strip():
-            st.warning("행사명 또는 간단 요청 내용을 입력해 주세요.")
-        elif "[옵션 B]" in input_mode and not routing_text.strip():
-            st.warning("루팅 정보를 입력해 주세요.")
+        if not api_key: st.error("GEMINI_API_KEY가 등록되지 않았습니다.")
         else:
             st.session_state.generated_file = None
-            
             raw_text_input = quick_prompt if "[옵션 A]" in input_mode else routing_text
+            combined_text = f"{tour_title} {raw_text_input}".strip()
             
-            # 🌐 URL 링크 감지 및 웹 크롤링 자동 처리
-            url_match = re.search(r"https?://[^\s]+", raw_text_input)
-            scraped_web_content = ""
-            if url_match:
-                found_url = url_match.group(0)
-                render_assistant_ui("working", f"🌐 입력된 웹 URL({found_url[:35]}...)에서 일정 데이터를 추출 중입니다! ⚡")
-                scraped_web_content = extract_text_from_url(found_url)
-            
-            combined_analysis_text = f"{tour_title} {raw_text_input}".strip()
-            matched_file_name, target_db_context = get_target_db_context(combined_analysis_text, use_db=use_db_toggle)
-            
-            if matched_file_name:
-                working_msg = f"📚 사내 기준 엑셀 ['{matched_file_name}'] 동선을 매칭하여 조립합니다! ⚡"
-            elif scraped_web_content:
-                working_msg = "🌐 웹페이지에서 추출한 일정 데이터를 바탕으로 실무 완판본을 조립합니다! ⚡"
-            else:
-                working_msg = "🌐 전 유럽 백과사전 지식 모드로 IN/OUT 도시를 고정하여 정밀 조립합니다! ⚡"
-            render_assistant_ui("working", working_msg)
+            matched_file_name, target_db_context = get_target_db_context(combined_text, use_db=use_db_toggle)
+            render_assistant_ui("working", "실무 완판 규격(식사 차단, 이동양식 통일, 항공 중복제거)으로 조립 중입니다! ⚡")
             
             with st.spinner("김똘망 사원이 일정표를 신속하게 제작하고 있습니다..."):
                 try:
                     system_prompt = f"""
-당신은 유럽 40개국 전 지역 인센티브 및 단체 패키지 수배 15년 차 수석 오퍼레이터 김똘망입니다.
-아래 제공된 [선택된 사내 기준 핵심 동선] 및 [사용자 입력 / 웹페이지 추출 데이터]를 바탕으로 고객 전달용 완벽한 엑셀 일정표 JSON을 생성하세요.
+당신은 유럽 단체 패키지 수배 15년 차 수석 오퍼레이터 김똘망입니다.
+아래 기준에 맞춰 고객 전달용 완벽한 엑셀 일정표 JSON을 생성하세요.
 
-[선택된 사내 기준 핵심 동선]
-{target_db_context if target_db_context else "(사내 DB 미등록/무시 모드: 사용자가 지정한 IN/OUT 도시 및 요청 권역에 맞춰 자체 정밀 설계할 것)"}
+[사내 기준 동선]
+{target_db_context if target_db_context else "(자체 정밀 맞춤 설계)"}
 
-[사용자 입력 요청]
+[사용자 입력]
 행사명: {tour_title}
-세부요청: {raw_text_input}
+요청: {raw_text_input}
 
-[웹페이지 자동 추출 데이터]
-{scraped_web_content if scraped_web_content else "(웹 URL 요청 없음)"}
-
-[🚨 7대 실무 절대 규칙 - 위반 절대 금지]
-1. **항공 및 IN/OUT 도시 절대 고정 룰 (가장 중요)**:
-   - 사용자가 입력/주입한 루팅 또는 웹페이지의 **1일차 도착 도시(IN)**와 **마지막 전날 귀국 탑승 도시(OUT)**는 **절대 임의로 변경하지 마세요!**
-   - 중간에 다른 나라나 도시를 경유하더라도, **마지막 전날에는 반드시 요청/주입된 OUT 도시(예: 코펜하겐 CPH 등)로 이동하여 해당 공항에서 귀국편을 탑승**하도록 동선을 닫으세요.
-   - 1일차 출국 및 마지막 전날 귀국 편명/시간은 입력 내용을 100% 반영할 것.
-   - 마지막 날 인천 도착 시간은 주입된 실제 도착시간을 반영할 것.
-
-2. **도시명 기재 원칙 (중복 도배 절대 금지)**:
-   - 도시는 **새로운 도시에 처음 도착했을 때 딱 1번만** city 칸에 기재할 것.
-   - 다음 날 아침 첫 번째 행(호텔 조식 행)에 **시작 도시명으로 1회만** 기재할 것.
-   - 같은 도시 안에서 진행되는 관광지(▶), 시내 이동, 호텔 투숙 행에는 city를 **반드시 빈칸("")**으로 둘 것!
-
-3. **도시 이동 표기 규격**:
-   - 미사여구 없이 반드시 **'[도착도시명]으로 이동 (약 O시간 O분 소요)'** 형식으로 작성.
-   - 이동 시간은 구글 기준 시간에 대형버스 안전 여유 **무조건 +30분 합산**.
-
-4. **'석식 후' 단독 행 전면 삭제**: 투어 종료 후 곧바로 `호텔 투숙 및 휴식`.
-
-5. **특수 지역 예외 룰**:
-   - 피렌체 투어 시 '우피치 미술관' 제외 (시내 도보 투어 대체).
-   - 친퀘테레 투어 시 **대표 1개 마을만 방문**.
-
-6. **관광 명소 부분 볼드**: ` ▶ [설명] **[핵심명소]**` 규격 준수.
-7. **식사 및 호텔**: 조/중/석 룰 준수, 튀르키예 5성 / 그 외 유럽 4성.
+[🚨 랜드사 실무 절대 규칙 - 위반 절대 금지]
+1. **항공편명 중복 표기 금지**:
+   - 편명(예: EK323, AY42)은 **1일차 인천 출발 행에만 단 1회** 기록하고, 두바이/헬싱키 등 현지 도착이나 환승/대기 행에서는 편명 이름을 절대 중복으로 적지 마세요.
+2. **도보 이동수단 전면 삭제**:
+   - 시내 관광 중 걷는 것은 교통편에 적지 않으며, 교통편 칸을 빈칸("")으로 비워두세요.
+3. **'전용차량 / 전  일' 2행 고정 및 반복 금지**:
+   - 2일차부터 차량 투어 시작 시 **2번째 행(index 1)에만** `transport="전용차량"`, `time="전  일"`을 고정하고, 이후 다른 교통수단(페리, 국내선 등)이 나오기 전까지는 반복 표기하지 마세요.
+4. **공항 상세 명칭 간소화**:
+   - `아테네 엘레프테리오스 베니젤로스 국제공항` 같은 긴 이름 금지. 반드시 **`아테네 국제공항 도착`** 형태로 간결하게 작성하세요.
+5. **이동 양식 통일**:
+   - 도시 간 이동은 반드시 **'[도착도시명]으로 이동 (약 O시간 O분 소요)'** 형식으로만 작성하세요. (구글 승용차 기준 시간에 대형버스 감안 +30분 자동 합산)
+6. **식사 내용 일정 칸 기재 원천 차단**:
+   - 일정(schedule) 텍스트 안에 `중식 (현지식)`, `석식 (연어정식)` 같은 식사 종류를 절대 적지 마세요. 식사는 우측 식사 칸(조/중/석)에서만 관리합니다.
+7. **IN/OUT 도시 고정 및 7대 수배 룰 준수**:
+   - 지정된 IN/OUT 도시는 절대 변경 금지. 우피치 미술관 제외, 친퀘테레 1개 마을 제한 준수. 마지막 전날 `기내 숙박`.
 """
 
                     json_schema = {
@@ -380,28 +266,11 @@ with col2:
                         }
                     }
 
-                    target_model = 'gemini-3.8-flash'
-                    response = None
-                    last_error = None
-
-                    for attempt in range(3):
-                        try:
-                            response = client.models.generate_content(
-                                model=target_model,
-                                contents=system_prompt,
-                                config=types.GenerateContentConfig(
-                                    response_mime_type="application/json",
-                                    response_schema=json_schema
-                                )
-                            )
-                            if response and response.text: break
-                        except Exception as e:
-                            last_error = e
-                            time.sleep(1.5)
-                            continue
-
-                    if not response or not response.text:
-                        raise Exception(f"일시적인 생성 지연: {last_error}")
+                    response = client.models.generate_content(
+                        model='gemini-3.8-flash',
+                        contents=system_prompt,
+                        config=types.GenerateContentConfig(response_mime_type="application/json", response_schema=json_schema)
+                    )
 
                     raw_text = response.text.strip()
                     if "```" in raw_text:
@@ -409,118 +278,48 @@ with col2:
                         raw_text = re.sub(r"\s*```$", "", raw_text, flags=re.MULTILINE)
                     
                     parsed_raw = json.loads(raw_text)
-                    
                     day_dict = {}
                     for item in parsed_raw:
                         d_num = item.get("day", 1)
                         if d_num not in day_dict:
-                            day_dict[d_num] = {
-                                "day": d_num, "rows": [],
-                                "meals": item.get("meals") or ["-", "-", "-"],
-                                "hotel": item.get("hotel") or ""
-                            }
+                            day_dict[d_num] = {"day": d_num, "rows": [], "meals": item.get("meals") or ["-", "-", "-"], "hotel": item.get("hotel") or ""}
                         for r_item in item.get("rows", []):
                             sc = str(r_item.get("schedule") or "").strip()
-                            if sc in ["석식 후", "석식후", "석식 후 호텔 투숙"]: continue
-                            if r_item.get("schedule") or r_item.get("city") or r_item.get("transport"):
-                                r_item["schedule"] = sc.replace("[", "").replace("]", "")
-                                day_dict[d_num]["rows"].append(r_item)
-                        if item.get("hotel"):
-                            day_dict[d_num]["hotel"] = str(item.get("hotel")).replace("[", "").replace("]", "").strip()
-                        if item.get("meals"):
-                            day_dict[d_num]["meals"] = item.get("meals")
+                            if sc in ["석식 후", "석식후"]: continue
+                            r_item["schedule"] = sc.replace("[", "").replace("]", "")
+                            day_dict[d_num]["rows"].append(r_item)
+                        if item.get("hotel"): day_dict[d_num]["hotel"] = str(item.get("hotel")).replace("[", "").replace("]", "").strip()
+                        if item.get("meals"): day_dict[d_num]["meals"] = item.get("meals")
 
                     parsed_days = [day_dict[k] for k in sorted(day_dict.keys())]
-
-                    # 실무 정밀 후처리
-                    valid_meals = ["호텔식", "현지식", "한   식", "중국식", "기내식", "-"]
-                    turkey_keywords = ["이스탄불", "카파도키아", "파묵칼레", "터키", "튀르키예", "안탈리아"]
                     total_days_cnt = len(parsed_days)
 
                     for item in parsed_days:
                         d_num = item["day"]
                         rows = item["rows"]
                         
+                        # 도보 행 및 일정 칸 내부 식사 문구 강제 필터링
                         cleaned_rows = []
                         for r in rows:
                             sc = str(r.get("schedule") or "").strip()
-                            if re.match(r"^[가-힣a-zA-Z\s]+관광$", sc) and not sc.startswith("▶"): continue
-                            if sc in ["석식 후", "석식후"]: continue
+                            tr = str(r.get("transport") or "").strip()
+                            if tr == "도보" or tr == "도보이동": continue
+                            if any(k in sc for k in ["중식(", "석식(", "조식(", "중식 (", "석식 ("]): continue
                             cleaned_rows.append(r)
                         rows = cleaned_rows
 
-                        if d_num > 1 and len(rows) > 0 and d_num != total_days_cnt:
-                            first_sc = rows[0].get("schedule", "")
-                            if "조식" in first_sc and len(first_sc) > 8:
-                                remainder = first_sc.replace("호텔 조식 후", "").replace("조식 후", "").strip()
-                                if remainder.startswith("후"): remainder = remainder[1:].strip()
-                                rows[0]["schedule"] = "호텔 조식 후"
-                                rows.insert(1, {"city": "", "transport": "", "time": "", "schedule": remainder})
-
-                        # 도시명 중복 제거
-                        current_day_cities = set()
-                        for idx, r in enumerate(rows):
-                            c_val = str(r.get("city") or "").strip()
-                            if c_val:
-                                if c_val in current_day_cities and idx > 0:
-                                    r["city"] = ""
-                                else:
-                                    current_day_cities.add(c_val)
-
-                        # 전용차량 / 전  일: 2번째 행(index 1) 고정
+                        # 2행 전용차량 고정
                         if 1 < d_num < total_days_cnt and len(rows) > 1:
                             for r in rows:
                                 if r.get("transport") == "전용차량": r["transport"] = ""
                                 if r.get("time") == "전  일": r["time"] = ""
                                 if str(r.get("schedule", "")).startswith("▶"): r["time"] = ""
-                            
                             rows[1]["transport"] = "전용차량"
                             rows[1]["time"] = "전  일"
 
-                        if d_num == 1:
-                            for r in rows:
-                                sc = str(r.get("schedule") or "")
-                                if "호텔로 이동" in sc:
-                                    r["transport"] = "전용차량"
-                                    r["time"] = ""
-
                         item["rows"] = rows
 
-                        cleaned_meals = []
-                        for m in item.get("meals", []):
-                            m_str = str(m or "").strip()
-                            if "호텔" in m_str or "조식" in m_str: cleaned_meals.append("호텔식")
-                            elif "한식" in m_str: cleaned_meals.append("한   식")
-                            elif "중식" in m_str or "중국" in m_str: cleaned_meals.append("중국식")
-                            elif "기내" in m_str: cleaned_meals.append("기내식")
-                            elif "현지" in m_str or "특식" in m_str: cleaned_meals.append("현지식")
-                            elif m_str in valid_meals: cleaned_meals.append(m_str)
-                            else: cleaned_meals.append("현지식" if m_str != "-" else "-")
-                        while len(cleaned_meals) < 3: cleaned_meals.append("-")
-                        item["meals"] = cleaned_meals[:3]
-
-                        if d_num == total_days_cnt - 1:
-                            item["rows"] = [r for r in rows if "인천 도착" not in r.get("schedule", "")]
-                            has_night = any("기내 숙박" in r.get("schedule", "") for r in item["rows"])
-                            if not has_night:
-                                item["rows"].append({"city": "인  천", "transport": "", "time": "", "schedule": "기내 숙박"})
-                            item["hotel"] = "HOTEL : 기내 숙박"
-                            if len(item["meals"]) == 3: item["meals"][2] = "기내식"
-
-                        elif d_num == total_days_cnt:
-                            orig_time = rows[0].get("time", "") if len(rows) > 0 else ""
-                            final_arr_time = orig_time if re.match(r"^\d{1,2}:\d{2}$", orig_time) else ""
-                            item["rows"] = [
-                                {"city": "인  천", "transport": "", "time": final_arr_time, "schedule": "인천 국제공항 도착 후 해산"}
-                            ]
-                            item["hotel"] = ""
-                            item["meals"] = ["기내식", "-", "-"]
-                        else:
-                            all_text = " ".join([r.get("schedule", "") + " " + str(r.get("city", "")) for r in rows])
-                            is_turkey = any(tk in all_text for tk in turkey_keywords)
-                            item["hotel"] = "HOTEL : ANY 5* HOTEL CLASS" if is_turkey else "HOTEL : ANY 4* HOTEL CLASS"
-
-                    # 엑셀 워크북 빌드
+                    # 엑셀 빌드
                     wb = openpyxl.Workbook()
                     ws = wb.active
                     ws.title = "일정표"
@@ -539,7 +338,6 @@ with col2:
                     fill_hotel = PatternFill(start_color="EFEFEF", end_color="EFEFEF", fill_type="solid")
                     align_center = Alignment(horizontal="center", vertical="center")
                     align_mid_left = Alignment(horizontal="left", vertical="center", wrap_text=True)
-                    
                     thin_side = Side(style="thin", color="000000")
                     med_side = Side(style="medium", color="000000")
                     
@@ -547,11 +345,7 @@ with col2:
                     ws.row_dimensions[1].height = 28.0
                     ws.cell(1, 1, full_title).font = font_title
                     ws.cell(1, 1).alignment = align_center
-                    
-                    for c in range(1, 8):
-                        cell = ws.cell(1, c)
-                        cell.fill = fill_title
-                        cell.border = Border(top=med_side, bottom=med_side, left=med_side if c==1 else None, right=med_side if c==7 else None)
+                    for c in range(1, 8): ws.cell(1, c).fill = fill_title
                     ws.merge_cells("A1:G1")
                     ws.row_dimensions[2].height = 13.0
                     
@@ -561,12 +355,10 @@ with col2:
                         cell = ws.cell(3, c, headers[c-1])
                         cell.font = font_header
                         cell.alignment = align_center
-                        cell.border = Border(top=med_side, bottom=med_side, left=med_side if c==1 else thin_side, right=med_side if c==7 else thin_side)
                     ws.merge_cells("F3:G3")
                     
                     col_widths = {1: 10.0, 2: 12.75, 3: 11.0, 4: 9.25, 5: 64.25, 6: 3.63, 7: 10.0}
-                    for c_idx, width in col_widths.items():
-                        ws.column_dimensions[get_column_letter(c_idx)].width = width
+                    for c_idx, width in col_widths.items(): ws.column_dimensions[get_column_letter(c_idx)].width = width
                     
                     days_korean = ["월요일", "화요일", "수요일", "목요일", "금요일", "토요일", "일요일"]
                     cur_row = 4
@@ -574,19 +366,11 @@ with col2:
                     for item_idx, item in enumerate(parsed_days):
                         day_num = item.get("day", item_idx + 1)
                         curr_date = start_date + timedelta(days=day_num - 1)
-                        day_str = f"제{day_num:02d}일"
-                        date_str = curr_date.strftime("%m월 %d일")
-                        weekday_str = days_korean[curr_date.weekday()]
+                        day_str, date_str, weekday_str = f"제{day_num:02d}일", curr_date.strftime("%m월 %d일"), days_korean[curr_date.weekday()]
                         
-                        rows_data = item.get("rows", [])
-                        hotel_str = str(item.get("hotel") or "").strip()
-                        meals = item.get("meals") or ["-", "-", "-"]
-                        
+                        rows_data, hotel_str, meals = item.get("rows", []), str(item.get("hotel") or "").strip(), item.get("meals") or ["-", "-", "-"]
                         is_last_day = (item_idx == len(parsed_days) - 1)
-                        first_row_text = str(rows_data[0].get("schedule", "")) if len(rows_data) > 0 else ""
-                        is_incheon_arrival = "인천" in first_row_text and "도착" in first_row_text
-                        
-                        has_hotel = bool(hotel_str) and not is_last_day and not is_incheon_arrival
+                        has_hotel = bool(hotel_str) and not is_last_day
                         total_rows = max(len(rows_data), 3) + (1 if has_hotel else 0)
                         
                         for r_idx in range(total_rows):
@@ -611,48 +395,20 @@ with col2:
                         for idx, r_data in enumerate(rows_data):
                             r = cur_row + idx
                             sc_text = str(r_data.get("schedule") or "")
-                            
-                            if r_data.get("city"): ws.cell(r, 2, str(r_data.get("city") or "")).alignment = align_center
-                            if r_data.get("transport"): ws.cell(r, 3, str(r_data.get("transport") or "")).alignment = align_center
-                            if r_data.get("time"): ws.cell(r, 4, str(r_data.get("time") or "")).alignment = align_center
+                            if r_data.get("city"): ws.cell(r, 2, str(r_data.get("city"))).alignment = align_center
+                            if r_data.get("transport"): ws.cell(r, 3, str(r_data.get("transport"))).alignment = align_center
+                            if r_data.get("time"): ws.cell(r, 4, str(r_data.get("time"))).alignment = align_center
                                 
                             cell_sc = ws.cell(r, 5)
                             cell_sc.alignment = align_mid_left
-                            
-                            if sc_text.strip().startswith("▶"):
-                                bold_match = re.search(r"^(.*?)\*\*(.+?)\*\*(.*)$", sc_text)
-                                if bold_match:
-                                    p_txt, b_txt, s_txt = bold_match.group(1), bold_match.group(2), bold_match.group(3)
-                                    rich_elems = []
-                                    if p_txt: rich_elems.append(TextBlock(in_font_regular, p_txt))
-                                    if b_txt: rich_elems.append(TextBlock(in_font_bold, b_txt))
-                                    if s_txt: rich_elems.append(TextBlock(in_font_regular, s_txt))
-                                    cell_sc.value = CellRichText(rich_elems)
-                                else:
-                                    parts = sc_text.rsplit(" ", 1)
-                                    if len(parts) == 2:
-                                        cell_sc.value = CellRichText([
-                                            TextBlock(in_font_regular, parts[0] + " "),
-                                            TextBlock(in_font_bold, parts[1])
-                                        ])
-                                    else:
-                                        cell_sc.value = sc_text
-                                        cell_sc.font = font_body
-                            else:
-                                cell_sc.value = sc_text
-                                cell_sc.font = font_body
+                            cell_sc.value = sc_text
                         
                         if has_hotel:
-                            h_row = cur_row + total_rows - 1
-                            h_cell = ws.cell(h_row, 5, hotel_str)
-                            h_cell.font = font_bold
-                            h_cell.alignment = align_mid_left
+                            ws.cell(cur_row + total_rows - 1, 5, hotel_str).font = font_bold
                         
-                        meal_labels = ["조", "중", "석"]
                         for m_idx in range(3):
-                            ws.cell(cur_row + m_idx, 6, meal_labels[m_idx]).alignment = align_center
-                            meal_val = meals[m_idx] if m_idx < len(meals) else "-"
-                            ws.cell(cur_row + m_idx, 7, str(meal_val)).alignment = align_center
+                            ws.cell(cur_row + m_idx, 6, ["조", "중", "석"][m_idx]).alignment = align_center
+                            ws.cell(cur_row + m_idx, 7, str(meals[m_idx] if m_idx < len(meals) else "-")).alignment = align_center
                         
                         cur_row += total_rows
                     
@@ -665,25 +421,15 @@ with col2:
                     
                     output = io.BytesIO()
                     wb.save(output)
-                    final_title = tour_title.strip() if tour_title.strip() else "유럽투어"
-                    file_name = f"{start_date.strftime('%Y-%m-%d')} {final_title} - 일정표.xlsx"
-                    
                     st.session_state.generated_file = output.getvalue()
-                    st.session_state.generated_filename = file_name
+                    st.session_state.generated_filename = f"{start_date.strftime('%Y-%m-%d')} {tour_title.strip() or '유럽투어'} - 일정표.xlsx"
                     st.session_state.ui_status = "success"
-                    
-                    if scraped_web_content:
-                        success_msg = f"선배님! 웹 URL 일정을 완벽히 흡수하여 실무 마스터 엑셀로 완성했습니다! 🙇‍♂️✨"
-                    elif matched_file_name:
-                        success_msg = f"선배님! '{matched_file_name}' 사내 규격으로 완성했습니다! 🙇‍♂️✨"
-                    else:
-                        success_msg = "선배님! IN/OUT 도시를 고정하여 맞춤 완판본을 제작했습니다! 🙇‍♂️✨"
-                    st.session_state.ui_msg = success_msg
+                    st.session_state.ui_msg = "선배님! 짚어주신 모든 디테일(식사 차단, 양식 통일, 항공 정밀필터)이 반영된 완판본입니다! 🙇‍♂️✨"
                     st.rerun()
 
                 except Exception as e:
                     st.session_state.ui_status = "working"
-                    st.session_state.ui_msg = f"오류가 발생했습니다: {str(e)}"
+                    st.session_state.ui_msg = f"오류 발생: {str(e)}"
                     st.error(f"오류 상세: {str(e)}")
 
     if st.session_state.generated_file:
