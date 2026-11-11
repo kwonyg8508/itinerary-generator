@@ -27,7 +27,7 @@ st.set_page_config(page_title="유럽 랜드사 일정표 생성기 (Master Edit
 if "generated_file" not in st.session_state: st.session_state.generated_file = None
 if "generated_filename" not in st.session_state: st.session_state.generated_filename = None
 if "ui_status" not in st.session_state: st.session_state.ui_status = "idle"
-if "ui_msg" not in st.session_state: st.session_state.ui_msg = "선배님! 식사 문구 원천 차단 및 이동 양식 통일 엔진 세팅 완료되었습니다. ☕"
+if "ui_msg" not in st.session_state: st.session_state.ui_msg = "선배님! 원본 완판본의 도시 중복 제거 및 경유편 표기 틀을 완벽 복구했습니다! ☕"
 if "routing_text_injected" not in st.session_state: st.session_state.routing_text_injected = ""
 if "selected_input_mode" not in st.session_state: st.session_state.selected_input_mode = "[옵션 A] 간편 단문 요청 (사내 DB 자동 매칭)"
 
@@ -67,7 +67,7 @@ html, body, [class*="css"] { font-family: 'Pretendard', sans-serif; }
 """, unsafe_allow_html=True)
 
 st.title("🇪🇺 유럽 일정표 자동 생성 시스템 (Master Edition)")
-st.caption("실무 완판 규격: 식사 문구 차단 | 이동 양식 통일 | 항공편명 중복 제거 | 도보 행 삭제")
+st.caption("실무 완판 규격: 도시 중복 제거 완벽 복구 | 경유편 표기 유지 | 2행 전용차량 고정")
 
 if render_flight_search_ui:
     render_flight_search_ui()
@@ -80,7 +80,7 @@ def extract_text_from_url(url: str) -> str:
         resp.encoding = resp.apparent_encoding
         soup = BeautifulSoup(resp.text, "html.parser")
         for tag in soup(["script", "style", "nav", "footer", "header", "noscript"]): tag.decompose()
-        return "\nnot [line.strip() for line in soup.get_text(separator='\n').splitlines() if len(line.strip()) > 3][:5000]"
+        return "\n".join([line.strip() for line in soup.get_text(separator="\n").splitlines() if len(line.strip()) > 3])[:5000]
     except Exception as e:
         return f"(웹페이지 수집 실패: {e})"
 
@@ -123,6 +123,7 @@ def get_target_db_context(user_query: str, use_db: bool = True):
             if "oz" in q_lower and "oz" in f_lower: score += 3
             if "ek" in q_lower and "ek" in f_lower: score += 5
             if "ay" in q_lower and "ay" in f_lower: score += 5
+            if "qr" in q_lower and "qr" in f_lower: score += 5
 
         if score > best_score:
             best_score = score
@@ -165,10 +166,10 @@ with col1:
         use_db_toggle = False
 
     start_date = st.date_input("출발일자 선택", datetime.today())
-    tour_title = st.text_input("행사명 (선택)", placeholder="예: 그리스, 로마 성지순례 10일 EK")
+    tour_title = st.text_input("행사명 (선택)", placeholder="예: 그리스, 로마 성지순례 10일 QR")
     
     if "[옵션 A]" in input_mode:
-        quick_prompt = st.text_input("간단 요청 / 웹 URL 입력", placeholder="예: 그리스 로마 10일 EK 에미레이트 항공")
+        quick_prompt = st.text_input("간단 요청 / 웹 URL 입력", placeholder="예: 그리스 로마 성지순례 10일 카타르항공 QR")
     else:
         current_injected_val = st.session_state.get("routing_text_injected", "")
         routing_text = st.text_area("루팅 및 일정 입력 / 웹 URL", value=current_injected_val, height=280)
@@ -208,7 +209,7 @@ with col2:
             combined_text = f"{tour_title} {raw_text_input}".strip()
             
             matched_file_name, target_db_context = get_target_db_context(combined_text, use_db=use_db_toggle)
-            render_assistant_ui("working", "실무 완판 규격(식사 차단, 이동양식 통일, 항공 중복제거)으로 조립 중입니다! ⚡")
+            render_assistant_ui("working", "도시 중복 제거 및 경유편 표기 틀을 복구하여 조립 중입니다! ⚡")
             
             with st.spinner("김똘망 사원이 일정표를 신속하게 제작하고 있습니다..."):
                 try:
@@ -224,18 +225,19 @@ with col2:
 요청: {raw_text_input}
 
 [🚨 랜드사 실무 절대 규칙 - 위반 절대 금지]
-1. **항공편명 중복 표기 금지**:
-   - 편명(예: EK323, AY42)은 **1일차 인천 출발 행에만 단 1회** 기록하고, 두바이/헬싱키 등 현지 도착이나 환승/대기 행에서는 편명 이름을 절대 중복으로 적지 마세요.
+1. **항공편명 중복 표기 금지 및 경유편 유지**:
+   - 편명(예: QR859, EK323)은 **1일차 인천 출발 행에만 단 1회** 기록하세요.
+   - 단, 두바이, 도하 등의 **환승/경유지 도착 및 대기 행(예: 도하 국제공항 도착 후 환승 대기)**은 누락하지 말고 반드시 포함하세요.
 2. **도보 이동수단 전면 삭제**:
    - 시내 관광 중 걷는 것은 교통편에 적지 않으며, 교통편 칸을 빈칸("")으로 비워두세요.
 3. **'전용차량 / 전  일' 2행 고정 및 반복 금지**:
    - 2일차부터 차량 투어 시작 시 **2번째 행(index 1)에만** `transport="전용차량"`, `time="전  일"`을 고정하고, 이후 다른 교통수단(페리, 국내선 등)이 나오기 전까지는 반복 표기하지 마세요.
 4. **공항 상세 명칭 간소화**:
-   - `아테네 엘레프테리오스 베니젤로스 국제공항` 같은 긴 이름 금지. 반드시 **`아테네 국제공항 도착`** 형태로 간결하게 작성하세요.
+   - 아테네/로마 국제공항 도착 등 간결하게 작성하세요.
 5. **이동 양식 통일**:
    - 도시 간 이동은 반드시 **'[도착도시명]으로 이동 (약 O시간 O분 소요)'** 형식으로만 작성하세요. (구글 승용차 기준 시간에 대형버스 감안 +30분 자동 합산)
 6. **식사 내용 일정 칸 기재 원천 차단**:
-   - 일정(schedule) 텍스트 안에 `중식 (현지식)`, `석식 (연어정식)` 같은 식사 종류를 절대 적지 마세요. 식사는 우측 식사 칸(조/중/석)에서만 관리합니다.
+   - 일정(schedule) 텍스트 안에 `중식 (현지식)`, `석식` 같은 식사 종류를 절대 적지 마세요. 식사는 우측 식사 칸(조/중/석)에서만 관리합니다.
 7. **IN/OUT 도시 고정 및 7대 수배 룰 준수**:
    - 지정된 IN/OUT 도시는 절대 변경 금지. 우피치 미술관 제외, 친퀘테레 1개 마을 제한 준수. 마지막 전날 `기내 숙박`.
 """
@@ -298,15 +300,26 @@ with col2:
                         d_num = item["day"]
                         rows = item["rows"]
                         
-                        # 도보 행 및 일정 칸 내부 식사 문구 강제 필터링
+                        # 도보 행 및 일정 칸 내부 식사 문구 필터링
                         cleaned_rows = []
                         for r in rows:
                             sc = str(r.get("schedule") or "").strip()
                             tr = str(r.get("transport") or "").strip()
-                            if tr == "도보" or tr == "도보이동": continue
+                            if tr in ["도보", "도보이동"]: continue
                             if any(k in sc for k in ["중식(", "석식(", "조식(", "중식 (", "석식 ("]): continue
                             cleaned_rows.append(r)
                         rows = cleaned_rows
+
+                        # 🚨 [도시명 중복 도배 방지 후처리 로직 강화]
+                        # 같은 날짜 안에서 이미 등장한 도시는 2번째 행부터 빈칸("")으로 확실히 밀어냄
+                        seen_cities_in_day = set()
+                        for r in rows:
+                            c_val = str(r.get("city") or "").strip()
+                            if c_val:
+                                if c_val in seen_cities_in_day:
+                                    r["city"] = ""
+                                else:
+                                    seen_cities_in_day.add(c_val)
 
                         # 2행 전용차량 고정
                         if 1 < d_num < total_days_cnt and len(rows) > 1:
@@ -330,9 +343,6 @@ with col2:
                     font_body = Font(name="맑은 고딕", size=9)
                     font_bold = Font(name="맑은 고딕", size=9, bold=True)
                     font_notice_red = Font(name="맑은 고딕", size=11, bold=True, color="FF0000")
-                    
-                    in_font_regular = InlineFont(rFont="맑은 고딕", sz=9.0, b=False)
-                    in_font_bold = InlineFont(rFont="맑은 고딕", sz=9.0, b=True)
                     
                     fill_title = PatternFill(start_color="FFFFCC", end_color="FFFFCC", fill_type="solid")
                     fill_hotel = PatternFill(start_color="EFEFEF", end_color="EFEFEF", fill_type="solid")
@@ -424,7 +434,7 @@ with col2:
                     st.session_state.generated_file = output.getvalue()
                     st.session_state.generated_filename = f"{start_date.strftime('%Y-%m-%d')} {tour_title.strip() or '유럽투어'} - 일정표.xlsx"
                     st.session_state.ui_status = "success"
-                    st.session_state.ui_msg = "선배님! 짚어주신 모든 디테일(식사 차단, 양식 통일, 항공 정밀필터)이 반영된 완판본입니다! 🙇‍♂️✨"
+                    st.session_state.ui_msg = "선배님! 도시 중복 제거와 경유편 안내가 포함된 원본 완판본 틀로 완벽 복구되었습니다! 🙇‍♂️✨"
                     st.rerun()
 
                 except Exception as e:
