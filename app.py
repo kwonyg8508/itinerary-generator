@@ -27,7 +27,7 @@ st.set_page_config(page_title="유럽 랜드사 일정표 생성기 (Master Edit
 if "generated_file" not in st.session_state: st.session_state.generated_file = None
 if "generated_filename" not in st.session_state: st.session_state.generated_filename = None
 if "ui_status" not in st.session_state: st.session_state.ui_status = "idle"
-if "ui_msg" not in st.session_state: st.session_state.ui_msg = "선배님! 상단 타이틀 테두리 누락분과 항공 데이터 수용부 완벽 마감 완료되었습니다! ☕"
+if "ui_msg" not in st.session_state: st.session_state.ui_msg = "선배님! 항공 시간 누락 방지 및 시간 칸 정밀 매칭 엔진 장착 완료되었습니다! ☕"
 if "routing_text_injected" not in st.session_state: st.session_state.routing_text_injected = ""
 if "selected_input_mode" not in st.session_state: st.session_state.selected_input_mode = "[옵션 A] 간편 단문 요청 (사내 DB 자동 매칭)"
 
@@ -67,7 +67,7 @@ html, body, [class*="css"] { font-family: 'Pretendard', sans-serif; }
 """, unsafe_allow_html=True)
 
 st.title("🇪🇺 유럽 일정표 자동 생성 시스템 (Master Edition)")
-st.caption("실무 완판 규격: 상단 타이틀 테두리 마감 | 항공 정밀 파싱 | 관광지 볼드 | 호텔 4성/5성 분기")
+st.caption("실무 완판 규격: 항공 시간 완벽 추출 | 상단 테두리 마감 | 관광지 볼드 | 호텔 4성/5성 분기")
 
 if render_flight_search_ui:
     render_flight_search_ui()
@@ -209,7 +209,7 @@ with col2:
             combined_text = f"{tour_title} {raw_text_input}".strip()
             
             matched_file_name, target_db_context = get_target_db_context(combined_text, use_db=use_db_toggle)
-            render_assistant_ui("working", "상단 타이틀 테두리 마감 및 완판본 틀을 조립 중입니다! ⚡")
+            render_assistant_ui("working", "항공 시간 및 엑셀 틀을 정밀 조립 중입니다! ⚡")
             
             with st.spinner("김똘망 사원이 일정표를 신속하게 제작하고 있습니다..."):
                 try:
@@ -225,13 +225,14 @@ with col2:
 요청: {raw_text_input}
 
 [🚨 랜드사 실무 절대 규칙 - 위반 절대 금지]
-1. **항공편명 중복 표기 금지 및 경유편 유지**:
-   - 편명(예: QR859, EK323)은 **1일차 인천 출발 행에만 단 1회** 기록하세요.
-   - 단, 두바이, 도하 등의 **환승/경유지 도착 및 대기 행(예: 도하 국제공항 도착 후 환승 대기)**은 누락하지 말고 반드시 포함하세요.
+1. **항공 시간(Time) 절대 누락 금지 및 형식 준수**:
+   - 미팅, 출국, 환승/대기, 현지 공항 출발 등 **모든 항공 관련 행에는 반드시 정확한 시간(예: 21:00, 01:20, 05:15 등)을 `time` 필드에 명시**하세요! 
+   - `time` 필드에는 절대 "전 일" 같은 문구를 넣지 말고 오직 **`HH:MM` 형식의 시간**만 기재하세요.
+   - 편명(예: QR859)은 **1일차 인천 출발 행에만 단 1회** 기록하고, 경유지(도하 등) 도착 및 환승 대기 행을 반드시 포함하세요.
 2. **도보 이동수단 전면 삭제**:
    - 시내 관광 중 걷는 것은 교통편에 적지 않으며, 교통편 칸을 빈칸("")으로 비워두세요.
 3. **'전용차량 / 전  일' 2행 고정 및 반복 금지**:
-   - 2일차부터 차량 투어 시작 시 **2번째 행(index 1)에만** `transport="전용차량"`, `time="전  일"`을 고정하고, 이후 다른 교통수단(페리, 국내선 등)이 나오기 전까지는 반복 표기하지 마세요.
+   - 2일차부터 차량 투어 시작 시 **2번째 행(index 1)에만** `transport="전용차량"`, `time="전  일"`을 고정하고, 이후 다른 교통수단(페리, 국내선 등)이 나오기 전까지는 반복 표기하지 마세요. (단, 항공 출도착 시간이 들어가는 행은 시간이 우선이므로 '전 일' 대신 시간을 넣으세요.)
 4. **관광 명소 부분 볼드체 서식 (매우 중요)**:
    - 관광지 설명 행은 반드시 **`▶ [설명] **[핵심명소]**`** 형식을 준수하여 핵심 명소 이름에 마크다운 볼드(`**`)를 적용하세요.
 5. **호텔 명기 규칙**:
@@ -321,14 +322,17 @@ with col2:
                                 else:
                                     seen_cities_in_day.add(c_val)
 
-                        # 2행 전용차량 고정
+                        # 2행 전용차량 고정 (단, 첫 행에 시간이 있거나 항공/환승 행인 경우 덮어쓰지 않음)
                         if 1 < d_num < total_days_cnt and len(rows) > 1:
-                            for r in rows:
-                                if r.get("transport") == "전용차량": r["transport"] = ""
-                                if r.get("time") == "전  일": r["time"] = ""
-                                if str(r.get("schedule", "")).startswith("▶"): r["time"] = ""
-                            rows[1]["transport"] = "전용차량"
-                            rows[1]["time"] = "전  일"
+                            for idx, r in enumerate(rows):
+                                if idx > 1:
+                                    if r.get("transport") == "전용차량": r["transport"] = ""
+                                    if r.get("time") == "전  일": r["time"] = ""
+                                    if str(r.get("schedule", "")).startswith("▶"): r["time"] = ""
+                            # 두 번째 행이 일반 일정일 때만 전용차량/전일 고정
+                            if not rows[1].get("time") or rows[1].get("time") == "전  일":
+                                rows[1]["transport"] = "전용차량"
+                                rows[1]["time"] = "전  일"
 
                         item["rows"] = rows
 
@@ -369,7 +373,6 @@ with col2:
                     ws.cell(1, 1, full_title).font = font_title
                     ws.cell(1, 1).alignment = align_center
                     
-                    # 🚨 [상단 타이틀 테두리 누락 완벽 마감] A1부터 G1까지 전체 외곽선에 두꺼운 테두리 적용
                     for c in range(1, 8):
                         cell = ws.cell(1, c)
                         cell.fill = fill_title
@@ -436,7 +439,6 @@ with col2:
                             cell_sc = ws.cell(r, 5)
                             cell_sc.alignment = align_mid_left
                             
-                            # 관광지명 부분 볼드체 파싱 적용
                             if sc_text.strip().startswith("▶"):
                                 bold_match = re.search(r"^(.*?)\*\*(.+?)\*\*(.*)$", sc_text)
                                 if bold_match:
@@ -476,7 +478,7 @@ with col2:
                     st.session_state.generated_file = output.getvalue()
                     st.session_state.generated_filename = f"{start_date.strftime('%Y-%m-%d')} {tour_title.strip() or '유럽투어'} - 일정표.xlsx"
                     st.session_state.ui_status = "success"
-                    st.session_state.ui_msg = "선배님! 상단 타이틀 외곽 테두리까지 완벽하게 마감된 최종 마스터 엑셀입니다! 🙇‍♂️✨"
+                    st.session_state.ui_msg = "선배님! 항공 시간까지 완벽하게 박힌 최종 완성본 엑셀이 준비되었습니다! 🙇‍♂️✨"
                     st.rerun()
 
                 except Exception as e:
