@@ -24,7 +24,7 @@ st.set_page_config(page_title="유럽 일정표 자동 생성 시스템 (Master 
 if "generated_file" not in st.session_state: st.session_state.generated_file = None
 if "generated_filename" not in st.session_state: st.session_state.generated_filename = None
 if "ui_status" not in st.session_state: st.session_state.ui_status = "idle"
-if "ui_msg" not in st.session_state: st.session_state.ui_msg = "선배님! 대형 입력창 장착 및 식사 규격 정비 완료되었습니다! ☕"
+if "ui_msg" not in st.session_state: st.session_state.ui_msg = "선배님! 항공 검색 기능과 대형 입력창이 완벽하게 준비되었습니다! ☕"
 
 st.markdown("""
 <style>
@@ -58,7 +58,7 @@ html, body, [class*="css"] { font-family: 'Pretendard', sans-serif; }
 """, unsafe_allow_html=True)
 
 st.title("🇪🇺 유럽 일정표 자동 생성 시스템 (Master Edition)")
-st.caption("실무 완판 규격: 대형 입력창 적용 | 항공 스케줄 복사 활용 | 관광지 볼드 | 식사 명칭 단독 표기")
+st.caption("실무 완판 규격: 실시간 항공 검색 & 복사 활용 | 대형 입력창 | 관광지 볼드 | 식사 명칭 단독 표기")
 
 if render_flight_search_ui:
     render_flight_search_ui()
@@ -98,7 +98,7 @@ with col1:
     start_date = st.date_input("출발일자 선택", datetime.today())
     tour_title = st.text_input("행사명 (선택)", placeholder="예: 아이슬란드 오로라 일주 7일 SAS")
     
-    # 입력창 크기를 대형(height=450)으로 대폭 확장
+    # 넉넉하고 시원한 대형 입력창 (height=450)
     routing_text = st.text_area(
         "확정 항공 및 상세 루팅 입력 (상단에서 복사한 항공 스케줄을 여기에 붙여넣으세요)",
         height=450,
@@ -412,7 +412,7 @@ with col2:
                     st.session_state.generated_file = output.getvalue()
                     st.session_state.generated_filename = f"{start_date.strftime('%Y-%m-%d')} {tour_title.strip() or '유럽투어'} - 일정표.xlsx"
                     st.session_state.ui_status = "success"
-                    st.session_state.ui_msg = "선배님! 복사 붙여넣기 방식과 식사 명칭 정리가 완벽하게 반영된 최종 엑셀이 완성되었습니다! 🙇‍♂️✨"
+                    st.session_state.ui_msg = "선배님! 항공 복사 붙여넣기 및 엑셀 빌드가 성공적으로 완료되었습니다! 🙇‍♂️✨"
                     st.rerun()
 
                 except Exception as e:
