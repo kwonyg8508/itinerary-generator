@@ -24,7 +24,8 @@ st.set_page_config(page_title="유럽 일정표 자동 생성 시스템 (Master 
 if "generated_file" not in st.session_state: st.session_state.generated_file = None
 if "generated_filename" not in st.session_state: st.session_state.generated_filename = None
 if "ui_status" not in st.session_state: st.session_state.ui_status = "idle"
-if "ui_msg" not in st.session_state: st.session_state.ui_msg = "선배님! 항공 검색 기능과 대형 입력창이 완벽하게 준비되었습니다! ☕"
+if "ui_msg" not in st.session_state: st.session_state.ui_msg = "선배님! 관광지 볼드 서식과 실무 식사/교통 칸 규격이 완벽하게 교정되었습니다! ☕"
+if "selected_input_mode" not in st.session_state: st.session_state.selected_input_mode = "[옵션 B] 직접 루팅 입력 (정밀 항공/일정 파싱)"
 
 st.markdown("""
 <style>
@@ -58,7 +59,7 @@ html, body, [class*="css"] { font-family: 'Pretendard', sans-serif; }
 """, unsafe_allow_html=True)
 
 st.title("🇪🇺 유럽 일정표 자동 생성 시스템 (Master Edition)")
-st.caption("실무 완판 규격: 실시간 항공 검색 & 복사 활용 | 대형 입력창 | 관광지 볼드 | 식사 명칭 단독 표기")
+st.caption("실무 완판 규격: 실시간 항공 검색 | 관광지 볼드 서식 완벽 사수 | 식사 명칭 단독 표기")
 
 if render_flight_search_ui:
     render_flight_search_ui()
@@ -94,28 +95,37 @@ client = genai.Client(api_key=api_key) if api_key else None
 col1, col2 = st.columns([1, 1])
 
 with col1:
-    st.subheader("1. 루팅 및 확정 항공 스케줄 입력")
+    st.subheader("1. 입력 방식 선택")
+    input_mode_options = ["[옵션 A] 간편 단문 요청", "[옵션 B] 직접 루팅 입력 (정밀 항공/일정 파싱)"]
+    selected_mode_idx = 1 if st.session_state.selected_input_mode == input_mode_options[1] else 0
+
+    input_mode = st.radio("작성 방식을 선택하세요:", input_mode_options, index=selected_mode_idx, horizontal=True, key="radio_input_mode")
+    st.session_state.selected_input_mode = input_mode
+
     start_date = st.date_input("출발일자 선택", datetime.today())
-    tour_title = st.text_input("행사명 (선택)", placeholder="예: 아이슬란드 오로라 일주 7일 SAS")
+    tour_title = st.text_input("행사명 (선택)", placeholder="예: 아이슬란드 오로라 일주 7일 SK")
     
-    # 넉넉하고 시원한 대형 입력창 (height=450)
-    routing_text = st.text_area(
-        "확정 항공 및 상세 루팅 입력 (상단에서 복사한 항공 스케줄을 여기에 붙여넣으세요)",
-        height=450,
-        placeholder="""[1일차]
+    if "[옵션 A]" in input_mode:
+        quick_prompt = st.text_input("간단 요청 / 웹 URL 입력", placeholder="예: 아이슬란드 오로라 일주 7일 SK")
+    else:
+        routing_text = st.text_area(
+            "확정 항공 및 상세 루팅 입력 (상단에서 복사한 항공 스케줄을 여기에 붙여넣으세요)",
+            height=450,
+            placeholder="""[1일차]
 - 인천 국제공항 미팅 후 출국
-- [SAS항공] SK988 | 인천 23:45 출발 ➔ 코펜하겐 경유
+- [SAS항공] SK506 | 인천 10:30 출발 ➔ 코펜하겐 경유
 [2일차]
-- 코펜하겐 출발 (SK595) ➔ 레이캬비크 도착 및 가이드 미팅
-- 호텔로 이동 후 투숙 및 휴식
+- 호텔 조식 후 로비 미팅
+- 싱벨리오르로 이동 (약 1시간 소요)
+- ▶ 유네스코 세계문화유산이자 세계 최신의 의회가 열린 **싱벨리어 국립공원** 관광
 ..."""
-    )
+        )
 
 with col2:
     st.subheader("2. AI 수배팀 작업 현황")
     ui_placeholder = st.empty()
 
-    def render_assistant_ui(status="idle", message="선배님, 항공 스케줄과 루팅을 붙여넣고 생성 버튼을 눌러주세요! ☕"):
+    def render_assistant_ui(status="idle", message="선배님, 루팅을 확인하고 생성 버튼을 눌러주세요! ☕"):
         badge_text, badge_class = ("🎉 제작 완료!", "badge-success") if status=="success" else (("🔥 폭풍 작업 중", "badge-working") if status=="working" else ("☕ 대기 중", "badge-idle"))
         cands = ["done.gif", "working.gif", "assistant.gif"]
         media_file = next((c for c in cands if os.path.exists(c)), None)
@@ -140,37 +150,40 @@ with col2:
 
     if generate_btn:
         if not api_key: st.error("GEMINI_API_KEY가 등록되지 않았습니다.")
-        elif not routing_text.strip(): st.warning("⚠️ 확정 항공 및 루팅 내용을 입력해 주세요!")
         else:
-            st.session_state.generated_file = None
-            combined_text = f"{tour_title} {routing_text}".strip()
-            
-            ref_filename, ref_context = get_reference_db_context(combined_text)
-            render_assistant_ui("working", "입력하신 항공 스케줄과 루팅을 완벽하게 반영하여 엑셀을 빌드 중입니다! ⚡ (Model: gemini-3.8-flash)")
-            
-            with st.spinner("김똘망 사원이 일정표를 신속하게 제작하고 있습니다..."):
-                try:
-                    system_prompt = f"""
+            raw_text_input = quick_prompt if "[옵션 A]" in input_mode else routing_text
+            if not raw_text_input.strip():
+                st.warning("⚠️ 입력 내용을 작성해 주세요!")
+            else:
+                st.session_state.generated_file = None
+                combined_text = f"{tour_title} {raw_text_input}".strip()
+                
+                ref_filename, ref_context = get_reference_db_context(combined_text)
+                render_assistant_ui("working", "관광지 볼드체 서식과 실무 랜드사 규칙을 적용하여 엑셀을 빌드 중입니다! ⚡ (Model: gemini-3.8-flash)")
+                
+                with st.spinner("김똘망 사원이 일정표를 신속하게 제작하고 있습니다..."):
+                    try:
+                        system_prompt = f"""
 당신은 유럽 단체 패키지 수배 15년 차 수석 오퍼레이터 김똘망입니다.
-아래 [사용자가 직접 입력한 확정 루팅 및 항공 스케줄]을 절대 법전으로 삼아 고객 전달용 완벽한 엑셀 일정표 JSON을 생성하세요.
+아래 [사용자 입력 및 항공 루팅]을 절대 법전으로 삼아 고객 전달용 완벽한 엑셀 일정표 JSON을 생성하세요.
 
-[사용자 입력 확정 루팅 및 항공 스케줄 (1순위 절대 반영)]
+[사용자 입력 및 항공 루팅 (1순위 절대 반영)]
 행사명: {tour_title}
-{routing_text}
+요청내용: {raw_text_input}
 
 [참고용 가이드북 스니펫 (표현 참고용)]
 {ref_context if ref_context else "(없음)"}
 
 [🚨 랜드사 실무 절대 규칙 - 위반 절대 금지]
 1. **항공 시간/편명 원본 사수**:
-   - 사용자가 입력한 항공편명과 시간을 훼손 없이 그대로 반영하세요.
-   - 편명은 교통편(`transport`) 칸에 단독 기재하고, 시간(`time`) 칸에는 정확한 `HH:MM`을 기재하세요.
+   - 사용자가 입력한 항공편명과 시간을 훼손 없이 정확히 반영하세요.
+   - 항공편명(예: SK506)은 교통편(`transport`) 칸에 기재하고, 출발/도착 시간(예: 10:30)은 시간(`time`) 칸에 기재하세요.
 2. **도보 이동수단 전면 삭제**:
    - 시내 관광 중 걷는 것은 교통편에 적지 않으며, 교통편 칸을 빈칸("")으로 비워두세요.
 3. **'전용차량 / 전  일' 2행 고정 및 반복 금지**:
    - 2일차부터 차량 투어 시작 시 **2번째 행(index 1)에만** `transport="전용차량"`, `time="전  일"`을 고정하고 반복 표기하지 마세요.
 4. **관광 명소 부분 볼드체 서식 (매우 중요)**:
-   - 관광지 설명 행은 반드시 **`▶ [설명] **[핵심명소]**`** 형식을 준수하여 핵심 명소 이름에 마크다운 볼드(`**`)를 적용하세요.
+   - 관광지 설명 행은 반드시 **`▶ [설명] **[핵심명소]**`** 형식을 준수하여 핵심 명소 이름에 반드시 마크다운 볼드(`**`)를 적용하세요. (예: `▶ 유네스코 세계문화유산이자 세계 최신의 의회가 열린 **싱벨리어 국립공원** 관광`)
 5. **호텔 명기 규칙**:
    - 튀르키예 지역은 `HOTEL : ANY 5* HOTEL CLASS`, 그 외 유럽 지역은 무조건 **`HOTEL : ANY 4* HOTEL CLASS`**로 표기하세요.
 6. **식사 칸 데이터 정제 규칙 (매우 중요)**:
@@ -178,247 +191,248 @@ with col2:
    - 절대 "조식: 호텔식", "석식: 현지식"처럼 앞에 `조식:`, `석식:` 같은 접두어를 붙이지 마세요.
 """
 
-                    json_schema = {
-                        "type": "ARRAY",
-                        "items": {
-                            "type": "OBJECT",
-                            "properties": {
-                                "day": {"type": "INTEGER"},
-                                "rows": {
-                                    "type": "ARRAY",
-                                    "items": {
-                                        "type": "OBJECT",
-                                        "properties": {
-                                            "city": {"type": "STRING"},
-                                            "transport": {"type": "STRING"},
-                                            "time": {"type": "STRING"},
-                                            "schedule": {"type": "STRING"}
-                                        },
-                                        "required": ["schedule"]
-                                    }
+                        json_schema = {
+                            "type": "ARRAY",
+                            "items": {
+                                "type": "OBJECT",
+                                "properties": {
+                                    "day": {"type": "INTEGER"},
+                                    "rows": {
+                                        "type": "ARRAY",
+                                        "items": {
+                                            "type": "OBJECT",
+                                            "properties": {
+                                                "city": {"type": "STRING"},
+                                                "transport": {"type": "STRING"},
+                                                "time": {"type": "STRING"},
+                                                "schedule": {"type": "STRING"}
+                                            },
+                                            "required": ["schedule"]
+                                        }
+                                    },
+                                    "meals": {"type": "ARRAY", "items": {"type": "STRING"}},
+                                    "hotel": {"type": "STRING"}
                                 },
-                                "meals": {"type": "ARRAY", "items": {"type": "STRING"}},
-                                "hotel": {"type": "STRING"}
-                            },
-                            "required": ["day", "rows"]
+                                "required": ["day", "rows"]
+                            }
                         }
-                    }
 
-                    response = client.models.generate_content(
-                        model='gemini-3.8-flash',
-                        contents=system_prompt,
-                        config=types.GenerateContentConfig(response_mime_type="application/json", response_schema=json_schema)
-                    )
+                        response = client.models.generate_content(
+                            model='gemini-3.8-flash',
+                            contents=system_prompt,
+                            config=types.GenerateContentConfig(response_mime_type="application/json", response_schema=json_schema)
+                        )
 
-                    raw_text = response.text.strip()
-                    if "```" in raw_text:
-                        raw_text = re.sub(r"^```(?:json)?\s*", "", raw_text, flags=re.MULTILINE)
-                        raw_text = re.sub(r"\s*```$", "", raw_text, flags=re.MULTILINE)
-                    
-                    parsed_raw = json.loads(raw_text)
-                    day_dict = {}
-                    for item in parsed_raw:
-                        d_num = item.get("day", 1)
-                        if d_num not in day_dict:
-                            day_dict[d_num] = {"day": d_num, "rows": [], "meals": ["-", "-", "-"], "hotel": item.get("hotel") or ""}
+                        raw_text = response.text.strip()
+                        if "```" in raw_text:
+                            raw_text = re.sub(r"^```(?:json)?\s*", "", raw_text, flags=re.MULTILINE)
+                            raw_text = re.sub(r"\s*```$", "", raw_text, flags=re.MULTILINE)
                         
-                        raw_meals = item.get("meals") or ["-", "-", "-"]
-                        cleaned_meals = []
-                        for m in raw_meals:
-                            m_str = str(m).strip()
-                            m_str = re.sub(r"^(조식|중식|석식)\s*[:：\-]?\s*", "", m_str)
-                            cleaned_meals.append(m_str if m_str else "-")
-                        while len(cleaned_meals) < 3: cleaned_meals.append("-")
-                        day_dict[d_num]["meals"] = cleaned_meals[:3]
-
-                        for r_item in item.get("rows", []):
-                            sc = str(r_item.get("schedule") or "").strip()
-                            if sc in ["석식 후", "석식후"]: continue
-                            r_item["schedule"] = sc.replace("[", "").replace("]", "")
-                            day_dict[d_num]["rows"].append(r_item)
-                        if item.get("hotel"): day_dict[d_num]["hotel"] = str(item.get("hotel")).replace("[", "").replace("]", "").strip()
-
-                    parsed_days = [day_dict[k] for k in sorted(day_dict.keys())]
-                    total_days_cnt = len(parsed_days)
-
-                    turkey_keywords = ["이스탄불", "카파도키아", "파묵칼레", "터키", "튀르키예", "안탈리아"]
-
-                    for item in parsed_days:
-                        d_num = item["day"]
-                        rows = item["rows"]
-                        
-                        cleaned_rows = []
-                        for r in rows:
-                            sc = str(r.get("schedule") or "").strip()
-                            tr = str(r.get("transport") or "").strip()
-                            if tr in ["도보", "도보이동"]: continue
-                            if any(k in sc for k in ["중식(", "석식(", "조식(", "중식 (", "석식 ("]): continue
-                            cleaned_rows.append(r)
-                        rows = cleaned_rows
-
-                        seen_cities_in_day = set()
-                        for r in rows:
-                            c_val = str(r.get("city") or "").strip()
-                            if c_val:
-                                if c_val in seen_cities_in_day:
-                                    r["city"] = ""
-                                else:
-                                    seen_cities_in_day.add(c_val)
-
-                        if 1 < d_num < total_days_cnt and len(rows) > 1:
-                            for idx, r in enumerate(rows):
-                                if idx > 1:
-                                    if r.get("transport") == "전용차량": r["transport"] = ""
-                                    if r.get("time") == "전  일": r["time"] = ""
-                                    if str(r.get("schedule", "")).startswith("▶"): r["time"] = ""
-                            if not rows[1].get("time") or rows[1].get("time") == "전  일":
-                                rows[1]["transport"] = "전용차량"
-                                rows[1]["time"] = "전  일"
-
-                        item["rows"] = rows
-
-                        if d_num == total_days_cnt - 1:
-                            item["hotel"] = "HOTEL : 기내 숙박"
-                        elif d_num == total_days_cnt:
-                            item["hotel"] = ""
-                        else:
-                            all_text = " ".join([r.get("schedule", "") + " " + str(r.get("city", "")) for r in rows])
-                            is_turkey = any(tk in all_text for tk in turkey_keywords)
-                            item["hotel"] = "HOTEL : ANY 5* HOTEL CLASS" if is_turkey else "HOTEL : ANY 4* HOTEL CLASS"
-
-                    wb = openpyxl.Workbook()
-                    ws = wb.active
-                    ws.title = "일정표"
-                    ws.views.sheetView[0].showGridLines = True
-                    
-                    font_title = Font(name="맑은 고딕", size=15, bold=True)
-                    font_header = Font(name="맑은 고딕", size=10, bold=True)
-                    font_body = Font(name="맑은 고딕", size=9)
-                    font_bold = Font(name="맑은 고딕", size=9, bold=True)
-                    font_notice_red = Font(name="맑은 고딕", size=11, bold=True, color="FF0000")
-                    
-                    in_font_regular = InlineFont(rFont="맑은 고딕", sz=9.0, b=False)
-                    in_font_bold = InlineFont(rFont="맑은 고딕", sz=9.0, b=True)
-                    
-                    fill_title = PatternFill(start_color="FFFFCC", end_color="FFFFCC", fill_type="solid")
-                    fill_hotel = PatternFill(start_color="EFEFEF", end_color="EFEFEF", fill_type="solid")
-                    align_center = Alignment(horizontal="center", vertical="center")
-                    align_mid_left = Alignment(horizontal="left", vertical="center", wrap_text=True)
-                    thin_side = Side(style="thin", color="000000")
-                    med_side = Side(style="medium", color="000000")
-                    
-                    full_title = tour_title.strip() if tour_title.strip() else f"{start_date.strftime('%Y-%m-%d')} 유럽투어 일정표"
-                    ws.row_dimensions[1].height = 28.0
-                    ws.cell(1, 1, full_title).font = font_title
-                    ws.cell(1, 1).alignment = align_center
-                    
-                    for c in range(1, 8):
-                        cell = ws.cell(1, c)
-                        cell.fill = fill_title
-                        cell.border = Border(top=med_side, bottom=med_side, left=med_side if c == 1 else None, right=med_side if c == 7 else None)
-                    ws.merge_cells("A1:G1")
-                    ws.row_dimensions[2].height = 13.0
-                    
-                    headers = ["날짜", "도시", "교통편", "시간", "일정", "식사", ""]
-                    ws.row_dimensions[3].height = 22.0
-                    for c in range(1, 8):
-                        cell = ws.cell(3, c, headers[c-1])
-                        cell.font = font_header
-                        cell.alignment = align_center
-                        cell.border = Border(top=med_side, bottom=med_side, left=med_side if c==1 else thin_side, right=med_side if c==7 else thin_side)
-                    ws.merge_cells("F3:G3")
-                    
-                    col_widths = {1: 10.0, 2: 12.75, 3: 11.0, 4: 9.25, 5: 64.25, 6: 3.63, 7: 10.0}
-                    for c_idx, width in col_widths.items(): ws.column_dimensions[get_column_letter(c_idx)].width = width
-                    
-                    days_korean = ["월요일", "화요일", "수요일", "목요일", "금요일", "토요일", "일요일"]
-                    cur_row = 4
-                    
-                    for item_idx, item in enumerate(parsed_days):
-                        day_num = item.get("day", item_idx + 1)
-                        curr_date = start_date + timedelta(days=day_num - 1)
-                        day_str, date_str, weekday_str = f"제{day_num:02d}일", curr_date.strftime("%m월 %d일"), days_korean[curr_date.weekday()]
-                        
-                        rows_data, hotel_str, meals = item.get("rows", []), str(item.get("hotel") or "").strip(), item.get("meals") or ["-", "-", "-"]
-                        is_last_day = (item_idx == len(parsed_days) - 1)
-                        has_hotel = bool(hotel_str) and not is_last_day
-                        total_rows = max(len(rows_data), 3) + (1 if has_hotel else 0)
-                        
-                        for r_idx in range(total_rows):
-                            r = cur_row + r_idx
-                            ws.row_dimensions[r].height = 18.75
-                            is_last_row = (r_idx == total_rows - 1)
-                            for c in range(1, 8):
-                                cell = ws.cell(r, c)
-                                cell.font = font_body
-                                b_top = thin_side if (is_last_row and has_hotel) else None
-                                b_bottom = med_side if is_last_row else None
-                                b_left = med_side if c == 1 else thin_side
-                                b_right = med_side if c == 7 else thin_side
-                                if is_last_row and has_hotel: cell.fill = fill_hotel
-                                cell.border = Border(top=b_top, bottom=b_bottom, left=b_left, right=b_right)
-                        
-                        ws.cell(cur_row, 1, day_str).font = font_bold
-                        ws.cell(cur_row, 1).alignment = align_center
-                        ws.cell(cur_row + 1, 1, date_str).alignment = align_center
-                        ws.cell(cur_row + 2, 1, weekday_str).alignment = align_center
-                        
-                        for idx, r_data in enumerate(rows_data):
-                            r = cur_row + idx
-                            sc_text = str(r_data.get("schedule") or "")
-                            if r_data.get("city"): ws.cell(r, 2, str(r_data.get("city"))).alignment = align_center
-                            if r_data.get("transport"): ws.cell(r, 3, str(r_data.get("transport"))).alignment = align_center
-                            if r_data.get("time"): ws.cell(r, 4, str(r_data.get("time"))).alignment = align_center
-                                
-                            cell_sc = ws.cell(r, 5)
-                            cell_sc.alignment = align_mid_left
+                        parsed_raw = json.loads(raw_text)
+                        day_dict = {}
+                        for item in parsed_raw:
+                            d_num = item.get("day", 1)
+                            if d_num not in day_dict:
+                                day_dict[d_num] = {"day": d_num, "rows": [], "meals": ["-", "-", "-"], "hotel": item.get("hotel") or ""}
                             
-                            if sc_text.strip().startswith("▶"):
-                                bold_match = re.search(r"^(.*?)\*\*(.+?)\*\*(.*)$", sc_text)
-                                if bold_match:
-                                    p_txt, b_txt, s_txt = bold_match.group(1), bold_match.group(2), bold_match.group(3)
-                                    rich_elems = []
-                                    if p_txt: rich_elems.append(TextBlock(in_font_regular, p_txt))
-                                    if b_txt: rich_elems.append(TextBlock(in_font_bold, b_txt))
-                                    if s_txt: rich_elems.append(TextBlock(in_font_regular, s_txt))
-                                    cell_sc.value = CellRichText(rich_elems)
+                            raw_meals = item.get("meals") or ["-", "-", "-"]
+                            cleaned_meals = []
+                            for m in raw_meals:
+                                m_str = str(m).strip()
+                                m_str = re.sub(r"^(조식|중식|석식)\s*[:：\-]?\s*", "", m_str)
+                                cleaned_meals.append(m_str if m_str else "-")
+                            while len(cleaned_meals) < 3: cleaned_meals.append("-")
+                            day_dict[d_num]["meals"] = cleaned_meals[:3]
+
+                            for r_item in item.get("rows", []):
+                                sc = str(r_item.get("schedule") or "").strip()
+                                if sc in ["석식 후", "석식후"]: continue
+                                r_item["schedule"] = sc.replace("[", "").replace("]", "")
+                                day_dict[d_num]["rows"].append(r_item)
+                            if item.get("hotel"): day_dict[d_num]["hotel"] = str(item.get("hotel")).replace("[", "").replace("]", "").strip()
+
+                        parsed_days = [day_dict[k] for k in sorted(day_dict.keys())]
+                        total_days_cnt = len(parsed_days)
+
+                        turkey_keywords = ["이스탄불", "카파도키아", "파묵칼레", "터키", "튀르키예", "안탈리아"]
+
+                        for item in parsed_days:
+                            d_num = item["day"]
+                            rows = item["rows"]
+                            
+                            cleaned_rows = []
+                            for r in rows:
+                                sc = str(r.get("schedule") or "").strip()
+                                tr = str(r.get("transport") or "").strip()
+                                if tr in ["도보", "도보이동"]: continue
+                                if any(k in sc for k in ["중식(", "석식(", "조식(", "중식 (", "석식 ("]): continue
+                                cleaned_rows.append(r)
+                            rows = cleaned_rows
+
+                            seen_cities_in_day = set()
+                            for r in rows:
+                                c_val = str(r.get("city") or "").strip()
+                                if c_val:
+                                    if c_val in seen_cities_in_day:
+                                        r["city"] = ""
+                                    else:
+                                        seen_cities_in_day.add(c_val)
+
+                            if 1 < d_num < total_days_cnt and len(rows) > 1:
+                                for idx, r in enumerate(rows):
+                                    if idx > 1:
+                                        if r.get("transport") == "전용차량": r["transport"] = ""
+                                        if r.get("time") == "전  일": r["time"] = ""
+                                        if str(r.get("schedule", "")).startswith("▶"): r["time"] = ""
+                                if not rows[1].get("time") or rows[1].get("time") == "전  일":
+                                    rows[1]["transport"] = "전용차량"
+                                    rows[1]["time"] = "전  일"
+
+                            item["rows"] = rows
+
+                            if d_num == total_days_cnt - 1:
+                                item["hotel"] = "HOTEL : 기내 숙박"
+                            elif d_num == total_days_cnt:
+                                item["hotel"] = ""
+                            else:
+                                all_text = " ".join([r.get("schedule", "") + " " + str(r.get("city", "")) for r in rows])
+                                is_turkey = any(tk in all_text for tk in turkey_keywords)
+                                item["hotel"] = "HOTEL : ANY 5* HOTEL CLASS" if is_turkey else "HOTEL : ANY 4* HOTEL CLASS"
+
+                        wb = openpyxl.Workbook()
+                        ws = wb.active
+                        ws.title = "일정표"
+                        ws.views.sheetView[0].showGridLines = True
+                        
+                        font_title = Font(name="맑은 고딕", size=15, bold=True)
+                        font_header = Font(name="맑은 고딕", size=10, bold=True)
+                        font_body = Font(name="맑은 고딕", size=9)
+                        font_bold = Font(name="맑은 고딕", size=9, bold=True)
+                        font_notice_red = Font(name="맑은 고딕", size=11, bold=True, color="FF0000")
+                        
+                        in_font_regular = InlineFont(rFont="맑은 고딕", sz=9.0, b=False)
+                        in_font_bold = InlineFont(rFont="맑은 고딕", sz=9.0, b=True)
+                        
+                        fill_title = PatternFill(start_color="FFFFCC", end_color="FFFFCC", fill_type="solid")
+                        fill_hotel = PatternFill(start_color="EFEFEF", end_color="EFEFEF", fill_type="solid")
+                        align_center = Alignment(horizontal="center", vertical="center")
+                        align_mid_left = Alignment(horizontal="left", vertical="center", wrap_text=True)
+                        thin_side = Side(style="thin", color="000000")
+                        med_side = Side(style="medium", color="000000")
+                        
+                        full_title = tour_title.strip() if tour_title.strip() else f"{start_date.strftime('%Y-%m-%d')} 유럽투어 일정표"
+                        ws.row_dimensions[1].height = 28.0
+                        ws.cell(1, 1, full_title).font = font_title
+                        ws.cell(1, 1).alignment = align_center
+                        
+                        for c in range(1, 8):
+                            cell = ws.cell(1, c)
+                            cell.fill = fill_title
+                            cell.border = Border(top=med_side, bottom=med_side, left=med_side if c == 1 else None, right=med_side if c == 7 else None)
+                        ws.merge_cells("A1:G1")
+                        ws.row_dimensions[2].height = 13.0
+                        
+                        headers = ["날짜", "도시", "교통편", "시간", "일정", "식사", ""]
+                        ws.row_dimensions[3].height = 22.0
+                        for c in range(1, 8):
+                            cell = ws.cell(3, c, headers[c-1])
+                            cell.font = font_header
+                            cell.alignment = align_center
+                            cell.border = Border(top=med_side, bottom=med_side, left=med_side if c==1 else thin_side, right=med_side if c==7 else thin_side)
+                        ws.merge_cells("F3:G3")
+                        
+                        col_widths = {1: 10.0, 2: 12.75, 3: 11.0, 4: 9.25, 5: 64.25, 6: 3.63, 7: 10.0}
+                        for c_idx, width in col_widths.items(): ws.column_dimensions[get_column_letter(c_idx)].width = width
+                        
+                        days_korean = ["월요일", "화요일", "수요일", "목요일", "금요일", "토요일", "일요일"]
+                        cur_row = 4
+                        
+                        for item_idx, item in enumerate(parsed_days):
+                            day_num = item.get("day", item_idx + 1)
+                            curr_date = start_date + timedelta(days=day_num - 1)
+                            day_str, date_str, weekday_str = f"제{day_num:02d}일", curr_date.strftime("%m월 %d일"), days_korean[curr_date.weekday()]
+                            
+                            rows_data, hotel_str, meals = item.get("rows", []), str(item.get("hotel") or "").strip(), item.get("meals") or ["-", "-", "-"]
+                            is_last_day = (item_idx == len(parsed_days) - 1)
+                            has_hotel = bool(hotel_str) and not is_last_day
+                            total_rows = max(len(rows_data), 3) + (1 if has_hotel else 0)
+                            
+                            for r_idx in range(total_rows):
+                                r = cur_row + r_idx
+                                ws.row_dimensions[r].height = 18.75
+                                is_last_row = (r_idx == total_rows - 1)
+                                for c in range(1, 8):
+                                    cell = ws.cell(r, c)
+                                    cell.font = font_body
+                                    b_top = thin_side if (is_last_row and has_hotel) else None
+                                    b_bottom = med_side if is_last_row else None
+                                    b_left = med_side if c == 1 else thin_side
+                                    b_right = med_side if c == 7 else thin_side
+                                    if is_last_row and has_hotel: cell.fill = fill_hotel
+                                    cell.border = Border(top=b_top, bottom=b_bottom, left=b_left, right=b_right)
+                            
+                            ws.cell(cur_row, 1, day_str).font = font_bold
+                            ws.cell(cur_row, 1).alignment = align_center
+                            ws.cell(cur_row + 1, 1, date_str).alignment = align_center
+                            ws.cell(cur_row + 2, 1, weekday_str).alignment = align_center
+                            
+                            for idx, r_data in enumerate(rows_data):
+                                r = cur_row + idx
+                                sc_text = str(r_data.get("schedule") or "")
+                                if r_data.get("city"): ws.cell(r, 2, str(r_data.get("city"))).alignment = align_center
+                                if r_data.get("transport"): ws.cell(r, 3, str(r_data.get("transport"))).alignment = align_center
+                                if r_data.get("time"): ws.cell(r, 4, str(r_data.get("time"))).alignment = align_center
+                                    
+                                cell_sc = ws.cell(r, 5)
+                                cell_sc.alignment = align_mid_left
+                                
+                                # 핵심 관광지 볼드체 렌더링 파서 (▶ [설명] **[핵심명소]**)
+                                if sc_text.strip().startswith("▶"):
+                                    bold_match = re.search(r"^(.*?)\*\*(.+?)\*\*(.*)$", sc_text)
+                                    if bold_match:
+                                        p_txt, b_txt, s_txt = bold_match.group(1), bold_match.group(2), bold_match.group(3)
+                                        rich_elems = []
+                                        if p_txt: rich_elems.append(TextBlock(in_font_regular, p_txt))
+                                        if b_txt: rich_elems.append(TextBlock(in_font_bold, b_txt))
+                                        if s_txt: rich_elems.append(TextBlock(in_font_regular, s_txt))
+                                        cell_sc.value = CellRichText(rich_elems)
+                                    else:
+                                        cell_sc.value = sc_text
+                                        cell_sc.font = font_body
                                 else:
                                     cell_sc.value = sc_text
                                     cell_sc.font = font_body
-                            else:
-                                cell_sc.value = sc_text
-                                cell_sc.font = font_body
+                            
+                            if has_hotel:
+                                h_cell = ws.cell(cur_row + total_rows - 1, 5, hotel_str)
+                                h_cell.font = font_bold
+                                h_cell.alignment = align_mid_left
+                            
+                            for m_idx in range(3):
+                                ws.cell(cur_row + m_idx, 6, ["조", "중", "석"][m_idx]).alignment = align_center
+                                ws.cell(cur_row + m_idx, 7, str(meals[m_idx] if m_idx < len(meals) else "-")).alignment = align_center
+                            
+                            cur_row += total_rows
                         
-                        if has_hotel:
-                            h_cell = ws.cell(cur_row + total_rows - 1, 5, hotel_str)
-                            h_cell.font = font_bold
-                            h_cell.alignment = align_mid_left
+                        notice_row = cur_row + 1
+                        ws.row_dimensions[notice_row].height = 22.0
+                        notice_cell = ws.cell(notice_row, 1, "* 상기 일정은 현지 사정에 따라 변경될 수 있습니다 *")
+                        notice_cell.font = font_notice_red
+                        notice_cell.alignment = align_center
+                        ws.merge_cells(start_row=notice_row, start_column=1, end_row=notice_row, end_column=7)
                         
-                        for m_idx in range(3):
-                            ws.cell(cur_row + m_idx, 6, ["조", "중", "석"][m_idx]).alignment = align_center
-                            ws.cell(cur_row + m_idx, 7, str(meals[m_idx] if m_idx < len(meals) else "-")).alignment = align_center
-                        
-                        cur_row += total_rows
-                    
-                    notice_row = cur_row + 1
-                    ws.row_dimensions[notice_row].height = 22.0
-                    notice_cell = ws.cell(notice_row, 1, "* 상기 일정은 현지 사정에 따라 변경될 수 있습니다 *")
-                    notice_cell.font = font_notice_red
-                    notice_cell.alignment = align_center
-                    ws.merge_cells(start_row=notice_row, start_column=1, end_row=notice_row, end_column=7)
-                    
-                    output = io.BytesIO()
-                    wb.save(output)
-                    st.session_state.generated_file = output.getvalue()
-                    st.session_state.generated_filename = f"{start_date.strftime('%Y-%m-%d')} {tour_title.strip() or '유럽투어'} - 일정표.xlsx"
-                    st.session_state.ui_status = "success"
-                    st.session_state.ui_msg = "선배님! 항공 복사 붙여넣기 및 엑셀 빌드가 성공적으로 완료되었습니다! 🙇‍♂️✨"
-                    st.rerun()
+                        output = io.BytesIO()
+                        wb.save(output)
+                        st.session_state.generated_file = output.getvalue()
+                        st.session_state.generated_filename = f"{start_date.strftime('%Y-%m-%d')} {tour_title.strip() or '유럽투어'} - 일정표.xlsx"
+                        st.session_state.ui_status = "success"
+                        st.session_state.ui_msg = "선배님! 관광지 볼드 서식과 완벽한 랜드사 규칙이 적용된 최종 마스터 엑셀이 완성되었습니다! 🙇‍♂️✨"
+                        st.rerun()
 
-                except Exception as e:
-                    st.session_state.ui_status = "working"
-                    st.session_state.ui_msg = f"오류 발생: {str(e)}"
-                    st.error(f"오류 상세: {str(e)}")
+                    except Exception as e:
+                        st.session_state.ui_status = "working"
+                        st.session_state.ui_msg = f"오류 발생: {str(e)}"
+                        st.error(f"오류 상세: {str(e)}")
 
     if st.session_state.generated_file:
         st.success("✅ 파일 준비 완료!")
