@@ -103,7 +103,7 @@ def search_single_leg(dep_code, arr_code, flight_date):
         return []
 
 def render_flight_search_ui():
-    with st.expander("✈️ [Add-on] 유럽 전 지역 실시간 항공 스케줄 조회 & 텍스트 추출", expanded=False):
+    with st.expander("✈️ [Add-on] 유럽 전 지역 실시간 항공 스케줄 조회 & 복사", expanded=False):
         c1, c2 = st.columns([1.5, 1])
         with c1: base_date = st.date_input("출발일 (IN)", datetime.now() + timedelta(days=60), key="fs_base_date")
         with c2: tour_days = st.number_input("행사 기간 (일수)", min_value=3, max_value=25, value=11, key="fs_tour_days")
@@ -112,11 +112,9 @@ def render_flight_search_ui():
         with c3:
             in_sel = st.selectbox("IN 도시 선택", list(EUROPE_AIRPORTS.keys()), index=22, key="fs_in_sel")
             in_code = st.text_input("IN 공항 코드", "KEF", key="fs_in_code").upper().strip() if EUROPE_AIRPORTS[in_sel] == "CUSTOM" else EUROPE_AIRPORTS[in_sel]
-            in_city_label = in_sel.split(" (")[0]
         with c4:
             out_sel = st.selectbox("OUT 도시 선택", list(EUROPE_AIRPORTS.keys()), index=0, key="fs_out_sel")
             out_code = st.text_input("OUT 공항 코드", "OSL", key="fs_out_code").upper().strip() if EUROPE_AIRPORTS[out_sel] == "CUSTOM" else EUROPE_AIRPORTS[out_sel]
-            out_sel.split(" (")[0]
 
         ret_fly_date = base_date + timedelta(days=tour_days - 2)
 
@@ -178,5 +176,5 @@ def render_flight_search_ui():
                     with ci:
                         st.info(f"**옵션 {idx+1} [{airline_name}]**\n\n• **출국:** {ob['summary']}\n\n• **귀국:** {ib['summary']}")
                     with cb:
-                        st.text_area(f"복사할 텍스트 (옵션 {idx+1})", copyable_block, height=120, key=f"copy_box_{idx}")
-                        st.caption("👆 위 상자 안의 내용을 드래그해서 복사(Ctrl+C) 후 아래 입력창에 붙여넣으세요!")
+                        st.text_area(f"복사 상자 {idx+1}", copyable_block, height=120, key=f"copy_box_{idx}")
+                        st.caption("👆 위 상자 내용을 복사(Ctrl+C)하여 아래 대형 입력창에 붙여넣으세요!")
