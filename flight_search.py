@@ -103,25 +103,25 @@ def search_single_leg(dep_code, arr_code, flight_date):
         return []
 
 def render_flight_search_ui():
-    with st.expander("✈️ [Add-on] 유럽 전 지역 실시간 항공 스케줄 조회 & 자동 주입", expanded=True):
+    with st.expander("✈️ [Add-on] 유럽 전 지역 실시간 항공 스케줄 조회 & 텍스트 추출", expanded=False):
         c1, c2 = st.columns([1.5, 1])
-        with c1: base_date = st.date_input("출발일 (IN)", datetime.now() + timedelta(days=60))
-        with c2: tour_days = st.number_input("행사 기간 (일수)", min_value=3, max_value=25, value=11)
+        with c1: base_date = st.date_input("출발일 (IN)", datetime.now() + timedelta(days=60), key="fs_base_date")
+        with c2: tour_days = st.number_input("행사 기간 (일수)", min_value=3, max_value=25, value=11, key="fs_tour_days")
 
         c3, c4 = st.columns(2)
         with c3:
-            in_sel = st.selectbox("IN 도시 선택", list(EUROPE_AIRPORTS.keys()), index=22) # 레이캬비크 기본
-            in_code = st.text_input("IN 공항 코드", "KEF").upper().strip() if EUROPE_AIRPORTS[in_sel] == "CUSTOM" else EUROPE_AIRPORTS[in_sel]
+            in_sel = st.selectbox("IN 도시 선택", list(EUROPE_AIRPORTS.keys()), index=22, key="fs_in_sel")
+            in_code = st.text_input("IN 공항 코드", "KEF", key="fs_in_code").upper().strip() if EUROPE_AIRPORTS[in_sel] == "CUSTOM" else EUROPE_AIRPORTS[in_sel]
             in_city_label = in_sel.split(" (")[0]
         with c4:
-            out_sel = st.selectbox("OUT 도시 선택", list(EUROPE_AIRPORTS.keys()), index=0)
-            out_code = st.text_input("OUT 공항 코드", "OSL").upper().strip() if EUROPE_AIRPORTS[out_sel] == "CUSTOM" else EUROPE_AIRPORTS[out_sel]
-            out_city_label = out_sel.split(" (")[0]
+            out_sel = st.selectbox("OUT 도시 선택", list(EUROPE_AIRPORTS.keys()), index=0, key="fs_out_sel")
+            out_code = st.text_input("OUT 공항 코드", "OSL", key="fs_out_code").upper().strip() if EUROPE_AIRPORTS[out_sel] == "CUSTOM" else EUROPE_AIRPORTS[out_sel]
+            out_sel.split(" (")[0]
 
         ret_fly_date = base_date + timedelta(days=tour_days - 2)
 
-        if st.button("🔎 동일 항공사 왕복 스케줄 실시간 조회", type="primary"):
-            with st.spinner("최적 환승(1회 경유, 3~4시간 컷) 항공편을 매칭 중입니다..."):
+        if st.button("🔎 동일 항공사 왕복 스케줄 실시간 조회", type="primary", key="fs_search_btn"):
+            with st.spinner("최적 환승 항공편을 매칭 중입니다..."):
                 outbound_list = search_single_leg("ICN", in_code, base_date)
                 inbound_list = search_single_leg(out_code, "ICN", ret_fly_date)
                 
@@ -144,43 +144,39 @@ def render_flight_search_ui():
                 st.markdown(f"#### 🎯 출귀국 동일 항공사 왕복 스케줄 ({len(pairs)}개 항공사)")
                 for idx, pair in enumerate(pairs[:5]):
                     ob, ib, airline_name = pair["out"], pair["ret"], pair["airline"]
-                    ci, cb = st.columns([4, 1])
+                    
+                    ob_legs = ob.get("legs", [])
+                    ib_legs = ib.get("legs", [])
+                    
+                    out_lines = []
+                    for l_idx, leg in enumerate(ob_legs):
+                        dep_a = leg.get("departure_airport", {}).get("id", "")
+                        arr_a = leg.get("arrival_airport", {}).get("id", "")
+                        dep_t = leg.get("departure_airport", {}).get("time", "")
+                        arr_t = leg.get("arrival_airport", {}).get("time", "")
+                        f_num = f"{leg.get('airline_code', '')}{leg.get('flight_number', '')}"
+                        if l_idx == 0:
+                            out_lines.append(f"[1일차]\n- 인천 국제공항 미팅 후 출국\n- [{airline_name}] {f_num} | 인천 {dep_t} 출발 ➔ {arr_a} {arr_t}")
+                        else:
+                            out_lines.append(f"   - 경유 환승: {dep_a} {dep_t} ➔ {arr_a} {arr_t} ({f_num})")
+
+                    ret_lines = []
+                    for l_idx, leg in enumerate(ib_legs):
+                        dep_a = leg.get("departure_airport", {}).get("id", "")
+                        arr_a = leg.get("arrival_airport", {}).get("id", "")
+                        dep_t = leg.get("departure_airport", {}).get("time", "")
+                        arr_t = leg.get("arrival_airport", {}).get("time", "")
+                        f_num = f"{leg.get('airline_code', '')}{leg.get('flight_number', '')}"
+                        if l_idx == 0:
+                            ret_lines.append(f"[{tour_days-1}일차]\n- 공항 이동 및 탑승 수속\n- [{airline_name}] {f_num} | {dep_a} {dep_t} ➔ {arr_a} {arr_t} / 기내 숙박")
+                        else:
+                            ret_lines.append(f"   - 경유 환승: {dep_a} {dep_t} ➔ {arr_a} {arr_t} ({f_num})")
+
+                    copyable_block = "\n".join(out_lines) + f"\n[2일차]\n- 현지 도착 후 가이드 미팅\n...\n" + "\n".join(ret_lines) + f"\n[{tour_days}일차]\n- 인천 국제공항 도착 후 해산"
+
+                    ci, cb = st.columns([3.5, 1.5])
                     with ci:
-                        st.info(f"**옵션 {idx+1} [{airline_name}] ⭐**\n\n• **출국:** {ob['summary']}\n\n• **귀국:** {ib['summary']}")
+                        st.info(f"**옵션 {idx+1} [{airline_name}]**\n\n• **출국:** {ob['summary']}\n\n• **귀국:** {ib['summary']}")
                     with cb:
-                        if st.button("👉 일정표 주입", key=f"inj_pair_{idx}"):
-                            ob_legs = ob.get("legs", [])
-                            ib_legs = ib.get("legs", [])
-                            
-                            out_lines = []
-                            for l_idx, leg in enumerate(ob_legs):
-                                dep_a = leg.get("departure_airport", {}).get("id", "")
-                                arr_a = leg.get("arrival_airport", {}).get("id", "")
-                                dep_t = leg.get("departure_airport", {}).get("time", "")
-                                arr_t = leg.get("arrival_airport", {}).get("time", "")
-                                f_num = f"{leg.get('airline_code', '')}{leg.get('flight_number', '')}"
-                                
-                                if l_idx == 0:
-                                    out_lines.append(f"1. 인천 국제공항 미팅 후 출국 / [{airline_name}] {f_num} 인천 {dep_t} 출발")
-                                else:
-                                    out_lines.append(f"   - 경유지 환승: {dep_a} {dep_t} 출발 ➔ {arr_a} {arr_t} 도착 ({f_num})")
-
-                            ret_lines = []
-                            for l_idx, leg in enumerate(ib_legs):
-                                dep_a = leg.get("departure_airport", {}).get("id", "")
-                                arr_a = leg.get("arrival_airport", {}).get("id", "")
-                                dep_t = leg.get("departure_airport", {}).get("time", "")
-                                arr_t = leg.get("arrival_airport", {}).get("time", "")
-                                f_num = f"{leg.get('airline_code', '')}{leg.get('flight_number', '')}"
-                                
-                                if l_idx == 0:
-                                    ret_lines.append(f"{tour_days-1}. {out_city_label} 공항 이동 / [{airline_name}] {f_num} {dep_a} {dep_t} ➔ {arr_a} {arr_t} / 기내 숙박")
-                                else:
-                                    ret_lines.append(f"   - 경유지 환승: {dep_a} {dep_t} 출발 ➔ {arr_a} {arr_t} 도착 ({f_num})")
-
-                            injected_full_text = "\n".join(out_lines) + f"\n2. {in_city_label} 도착 후 가이드 미팅 및 투어 진행\n3. 전일 관광 및 이동\n" + "\n".join(ret_lines) + f"\n{tour_days}. 인천 국제공항 도착 후 해산"
-
-                            st.session_state["routing_text_injected"] = injected_full_text
-                            st.session_state["selected_input_mode"] = "[옵션 B] 직접 루팅 입력 (정밀 항공/일정 파싱)"
-                            st.success(f"✅ [{airline_name}] 실시간 조회된 정확한 스케줄이 옵션 B에 완벽하게 주입되었습니다!")
-                            st.rerun()
+                        st.text_area(f"복사할 텍스트 (옵션 {idx+1})", copyable_block, height=120, key=f"copy_box_{idx}")
+                        st.caption("👆 위 상자 안의 내용을 드래그해서 복사(Ctrl+C) 후 아래 입력창에 붙여넣으세요!")
