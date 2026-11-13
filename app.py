@@ -11,8 +11,6 @@ import os
 import re
 import glob
 import base64
-import requests
-from bs4 import BeautifulSoup
 from google import genai
 from google.genai import types
 
@@ -26,9 +24,7 @@ st.set_page_config(page_title="유럽 일정표 자동 생성 시스템 (Master 
 if "generated_file" not in st.session_state: st.session_state.generated_file = None
 if "generated_filename" not in st.session_state: st.session_state.generated_filename = None
 if "ui_status" not in st.session_state: st.session_state.ui_status = "idle"
-if "ui_msg" not in st.session_state: st.session_state.ui_msg = "선배님! 항공 주입 데이터 연동 및 식사 칸 규격이 완벽하게 정비되었습니다! ✈️☕"
-if "routing_text_injected" not in st.session_state: st.session_state.routing_text_injected = ""
-if "selected_input_mode" not in st.session_state: st.session_state.selected_input_mode = "[옵션 B] 직접 루팅 입력 (정밀 항공/일정 파싱)"
+if "ui_msg" not in st.session_state: st.session_state.ui_msg = "선배님! 대형 입력창 장착 및 식사 규격 정비 완료되었습니다! ☕"
 
 st.markdown("""
 <style>
@@ -62,7 +58,7 @@ html, body, [class*="css"] { font-family: 'Pretendard', sans-serif; }
 """, unsafe_allow_html=True)
 
 st.title("🇪🇺 유럽 일정표 자동 생성 시스템 (Master Edition)")
-st.caption("실무 완판 규격: 실시간 항공 검색 & 완벽 주입 | 편명 교통편 칸 배치 | 관광지 볼드 | 식사 명칭 단독 표기")
+st.caption("실무 완판 규격: 대형 입력창 적용 | 항공 스케줄 복사 활용 | 관광지 볼드 | 식사 명칭 단독 표기")
 
 if render_flight_search_ui:
     render_flight_search_ui()
@@ -98,27 +94,28 @@ client = genai.Client(api_key=api_key) if api_key else None
 col1, col2 = st.columns([1, 1])
 
 with col1:
-    st.subheader("1. 입력 방식 선택")
-    input_mode_options = ["[옵션 A] 간편 단문 요청", "[옵션 B] 직접 루팅 입력 (정밀 항공/일정 파싱)"]
-    selected_mode_idx = 1 if st.session_state.selected_input_mode == input_mode_options[1] else 0
-
-    input_mode = st.radio("작성 방식을 선택하세요:", input_mode_options, index=selected_mode_idx, horizontal=True, key="radio_input_mode")
-    st.session_state.selected_input_mode = input_mode
-
+    st.subheader("1. 루팅 및 확정 항공 스케줄 입력")
     start_date = st.date_input("출발일자 선택", datetime.today())
     tour_title = st.text_input("행사명 (선택)", placeholder="예: 아이슬란드 오로라 일주 7일 SAS")
     
-    if "[옵션 A]" in input_mode:
-        quick_prompt = st.text_input("간단 요청 / 웹 URL 입력", placeholder="예: 아이슬란드 오로라 일주 7일 SAS")
-    else:
-        current_injected_val = st.session_state.get("routing_text_injected", "")
-        routing_text = st.text_area("루팅 및 일정 입력 / 웹 URL (상단 항공 검색에서 [일정표 주입] 시 자동 채워짐)", value=current_injected_val, height=280, key="routing_text_area_input")
+    # 입력창 크기를 대형(height=450)으로 대폭 확장
+    routing_text = st.text_area(
+        "확정 항공 및 상세 루팅 입력 (상단에서 복사한 항공 스케줄을 여기에 붙여넣으세요)",
+        height=450,
+        placeholder="""[1일차]
+- 인천 국제공항 미팅 후 출국
+- [SAS항공] SK988 | 인천 23:45 출발 ➔ 코펜하겐 경유
+[2일차]
+- 코펜하겐 출발 (SK595) ➔ 레이캬비크 도착 및 가이드 미팅
+- 호텔로 이동 후 투숙 및 휴식
+..."""
+    )
 
 with col2:
     st.subheader("2. AI 수배팀 작업 현황")
     ui_placeholder = st.empty()
 
-    def render_assistant_ui(status="idle", message="선배님, 항공 검색 후 주입하시거나 요청해 주시면 즉각 빌드하겠습니다! ☕"):
+    def render_assistant_ui(status="idle", message="선배님, 항공 스케줄과 루팅을 붙여넣고 생성 버튼을 눌러주세요! ☕"):
         badge_text, badge_class = ("🎉 제작 완료!", "badge-success") if status=="success" else (("🔥 폭풍 작업 중", "badge-working") if status=="working" else ("☕ 대기 중", "badge-idle"))
         cands = ["done.gif", "working.gif", "assistant.gif"]
         media_file = next((c for c in cands if os.path.exists(c)), None)
@@ -143,31 +140,31 @@ with col2:
 
     if generate_btn:
         if not api_key: st.error("GEMINI_API_KEY가 등록되지 않았습니다.")
+        elif not routing_text.strip(): st.warning("⚠️ 확정 항공 및 루팅 내용을 입력해 주세요!")
         else:
             st.session_state.generated_file = None
-            raw_text_input = quick_prompt if "[옵션 A]" in input_mode else (st.session_state.get("routing_text_area_input") or routing_text)
-            combined_text = f"{tour_title} {raw_text_input}".strip()
+            combined_text = f"{tour_title} {routing_text}".strip()
             
             ref_filename, ref_context = get_reference_db_context(combined_text)
-            render_assistant_ui("working", "선택하신 항공 스케줄과 루팅을 정밀하게 조합하여 엑셀을 빌드 중입니다! ⚡ (Model: gemini-3.8-flash)")
+            render_assistant_ui("working", "입력하신 항공 스케줄과 루팅을 완벽하게 반영하여 엑셀을 빌드 중입니다! ⚡ (Model: gemini-3.8-flash)")
             
             with st.spinner("김똘망 사원이 일정표를 신속하게 제작하고 있습니다..."):
                 try:
                     system_prompt = f"""
 당신은 유럽 단체 패키지 수배 15년 차 수석 오퍼레이터 김똘망입니다.
-아래 [사용자 입력 및 항공 루팅]을 절대 법전으로 삼아 고객 전달용 완벽한 엑셀 일정표 JSON을 생성하세요.
+아래 [사용자가 직접 입력한 확정 루팅 및 항공 스케줄]을 절대 법전으로 삼아 고객 전달용 완벽한 엑셀 일정표 JSON을 생성하세요.
 
-[사용자 입력 및 항공 루팅 (1순위 절대 반영)]
+[사용자 입력 확정 루팅 및 항공 스케줄 (1순위 절대 반영)]
 행사명: {tour_title}
-요청내용: {raw_text_input}
+{routing_text}
 
 [참고용 가이드북 스니펫 (표현 참고용)]
 {ref_context if ref_context else "(없음)"}
 
 [🚨 랜드사 실무 절대 규칙 - 위반 절대 금지]
-1. **항공 시간/편명 정밀 반영**:
-   - 사용자가 주입하거나 입력한 항공편명과 시간을 그대로 반영하세요.
-   - 편명은 교통편(`transport`) 칸에 단독으로 기재하고, 시간(`time`) 칸에는 정확한 `HH:MM`을 기재하세요.
+1. **항공 시간/편명 원본 사수**:
+   - 사용자가 입력한 항공편명과 시간을 훼손 없이 그대로 반영하세요.
+   - 편명은 교통편(`transport`) 칸에 단독 기재하고, 시간(`time`) 칸에는 정확한 `HH:MM`을 기재하세요.
 2. **도보 이동수단 전면 삭제**:
    - 시내 관광 중 걷는 것은 교통편에 적지 않으며, 교통편 칸을 빈칸("")으로 비워두세요.
 3. **'전용차량 / 전  일' 2행 고정 및 반복 금지**:
@@ -176,11 +173,9 @@ with col2:
    - 관광지 설명 행은 반드시 **`▶ [설명] **[핵심명소]**`** 형식을 준수하여 핵심 명소 이름에 마크다운 볼드(`**`)를 적용하세요.
 5. **호텔 명기 규칙**:
    - 튀르키예 지역은 `HOTEL : ANY 5* HOTEL CLASS`, 그 외 유럽 지역은 무조건 **`HOTEL : ANY 4* HOTEL CLASS`**로 표기하세요.
-6. **이동 양식 통일**:
-   - 도시 간 이동은 반드시 **'[도착도시명]으로 이동 (약 O시간 O분 소요)'** 형식으로만 작성하세요.
-7. **식사 칸 데이터 정제 규칙 (매우 중요)**:
+6. **식사 칸 데이터 정제 규칙 (매우 중요)**:
    - `meals` 배열에는 오직 **'호텔식', '기내식', '현지식', '자유식', '-'** 등 식사 종류 명칭만 순수하게 담으세요. 
-   - 절대 "조식: 호텔식", "석식: 현지식"처럼 앞에 `조식:`, `석식:` 같은 접두어를 붙이지 마세요. (엑셀 우측 조/중/석 글자는 자동으로 출력되므로 명칭만 들어가야 합니다.)
+   - 절대 "조식: 호텔식", "석식: 현지식"처럼 앞에 `조식:`, `석식:` 같은 접두어를 붙이지 마세요.
 """
 
                     json_schema = {
@@ -227,7 +222,6 @@ with col2:
                         if d_num not in day_dict:
                             day_dict[d_num] = {"day": d_num, "rows": [], "meals": ["-", "-", "-"], "hotel": item.get("hotel") or ""}
                         
-                        # 식사 데이터 후처리 정제 (조식:, 석식: 등의 불필요한 접두어 완벽 제거)
                         raw_meals = item.get("meals") or ["-", "-", "-"]
                         cleaned_meals = []
                         for m in raw_meals:
@@ -418,7 +412,7 @@ with col2:
                     st.session_state.generated_file = output.getvalue()
                     st.session_state.generated_filename = f"{start_date.strftime('%Y-%m-%d')} {tour_title.strip() or '유럽투어'} - 일정표.xlsx"
                     st.session_state.ui_status = "success"
-                    st.session_state.ui_msg = "선배님! 항공 주입 데이터와 식사 명칭이 오차 없이 100% 반영된 최종 엑셀이 완성되었습니다! 🙇‍♂️✨"
+                    st.session_state.ui_msg = "선배님! 복사 붙여넣기 방식과 식사 명칭 정리가 완벽하게 반영된 최종 엑셀이 완성되었습니다! 🙇‍♂️✨"
                     st.rerun()
 
                 except Exception as e:
