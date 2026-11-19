@@ -1,6 +1,6 @@
 import re
 import shutil
-from urllib.parse import parse_qs, urlencode, urlsplit
+from urllib.parse import parse_qs, urlsplit
 
 PRODUCT_PATH = "/trp/pkg/CHPC0PKG0200M200"
 
@@ -20,11 +20,9 @@ def product_url(url):
         or (departure and not re.fullmatch(r"\d{8}", departure))
     ):
         raise ValueError("하나투어 상품 상세 주소와 상품코드(pkgCd)를 확인해 주세요.")
-    params = {"pkgCd": product}
-    if departure:
-        params["depDay"] = departure
-    params["newWin"] = "true"
-    return f"https://www.hanatour.com{PRODUCT_PATH}?{urlencode(params)}"
+    if parsed.scheme != "https" or not is_hanatour(parsed.hostname) or parsed.username or parsed.password or parsed.port not in (None, 443):
+        raise ValueError("하나투어 HTTPS 상품 주소를 확인해 주세요.")
+    return parsed._replace(fragment="").geturl()
 
 
 def read_hanatour_itinerary(url):
@@ -42,7 +40,7 @@ def read_hanatour_itinerary(url):
             raise ValueError("일정 읽기용 Chromium을 시작하지 못했습니다. Streamlit 배포 로그를 확인해 주세요.") from error
         try:
             page = browser.new_page(locale="ko-KR", service_workers="block")
-            page.set_default_timeout(18000)
+            page.set_default_timeout(30000)
 
             def allow_hanatour(route):
                 request = route.request
@@ -53,23 +51,29 @@ def read_hanatour_itinerary(url):
                     route.abort()
 
             page.route("**/*", allow_hanatour)
-            page.goto(address, wait_until="domcontentloaded", timeout=22000)
-            return _read_schedule_tab(page)
+            response = page.goto(address, wait_until="domcontentloaded", timeout=22000)
+            if response and not response.ok:
+                raise ValueError(f"하나투어 상품 페이지 응답 오류 (HTTP {response.status}).")
+            return _read_schedule_tab(page, Error)
         except Error as error:
-            raise ValueError("하나투어 상품 화면에서 여행일정 탭의 일자별 내용을 불러오지 못했습니다.") from error
+            raise ValueError("하나투어 상품 페이지 접속 또는 응답 대기 시간이 초과됐습니다.") from error
         finally:
             browser.close()
 
 
-def _read_schedule_tab(page):
-    page.get_by_role("link", name="여행일정", exact=True).click()
-    second_day = page.get_by_role("link", name=re.compile(r"^2일차\s+\d{2}/\d{2}")).first
-    second_day.wait_for(state="visible")
-    day_links = page.get_by_role("link", name=re.compile(r"^\d{1,2}일차\s+\d{2}/\d{2}"))
+def _read_schedule_tab(page, browser_error):
+    day_pattern = re.compile(r"^\s*\d{1,2}\s*일차\s+\d{1,2}[./-]\d{1,2}")
+    try:
+        page.get_by_text("여행일정", exact=True).filter(visible=True).first.click()
+    except browser_error as error:
+        raise ValueError("하나투어 상품 페이지에서 ‘여행일정’ 탭을 찾거나 열지 못했습니다.") from error
+    day_links = page.get_by_role("link", name=day_pattern)
+    try:
+        day_links.nth(1).wait_for(state="visible")
+    except browser_error as error:
+        raise ValueError("하나투어 ‘여행일정’ 탭은 열렸지만 날짜별 일정이 표시되지 않았습니다.") from error
     summary = day_links.all_inner_texts()
-    if len(summary) < 2:
-        raise ValueError("하나투어에서 일자별 일정이 충분히 표시되지 않았습니다.")
     body = page.locator("body").inner_text()
-    start = re.search(r"(?m)^\s*1일차\s+\d{2}/\d{2}", body)
+    start = re.search(r"(?m)^\s*1\s*일차\s+\d{1,2}[./-]\d{1,2}", body)
     detail = body[start.start():] if start else ""
     return "\n\n".join(("\n".join(summary), detail[:26000])).strip()
