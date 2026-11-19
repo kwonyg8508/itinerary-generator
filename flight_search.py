@@ -38,7 +38,7 @@ def parse_segment(segment):
     }
 
 
-def search_single_leg(dep_code, arr_code, flight_date, diagnostics=None):
+def search_single_leg(dep_code, arr_code, flight_date, diagnostics=None, *, direct_only=False):
     key = st.secrets.get("SERPAPI_API_KEY", "")
     if not key:
         raise ValueError("Streamlit Secrets에 SERPAPI_API_KEY를 설정해 주세요.")
@@ -58,11 +58,14 @@ def search_single_leg(dep_code, arr_code, flight_date, diagnostics=None):
     if response.get("error"):
         raise ValueError("항공 검색 API가 오류를 반환했습니다.")
     results = []
+    short_connections = []
     for option in (response.get("best_flights") or []) + (response.get("other_flights") or []):
         raw = option.get("flights") or []
         numbers = " / ".join(str(leg.get("flight_number") or "편명 없음") for leg in raw)
         reason = ""
         legs = []
+        if direct_only and len(raw) != 1:
+            continue
         if not 1 <= len(raw) <= 2:
             reason = "구간 정보 없음 또는 2회 이상 경유"
         else:
@@ -82,11 +85,50 @@ def search_single_leg(dep_code, arr_code, flight_date, diagnostics=None):
                     reason = "환승 공항이 다름"
                 elif not timedelta(hours=1) <= layover <= timedelta(hours=5):
                     reason = f"환승 {layover // timedelta(minutes=1)}분 (허용 60~300분)"
+                    if timedelta(0) <= layover < timedelta(hours=1):
+                        short_connections.append((first, second["carrier"]))
         if diagnostics is not None:
             diagnostics.append({"API 편명": numbers or "—", "처리": reason or "표시"})
         if not reason:
             results.append(legs)
+    if short_connections:
+        results.extend(_find_later_connections(short_connections, arr_code, results, diagnostics))
     return results
+
+
+def _find_later_connections(short_connections, destination, existing, diagnostics):
+    def identity(legs):
+        return tuple((leg["number"], leg["dep"], leg["arr"]) for leg in legs)
+
+    seen = {identity(legs) for legs in existing}
+    searches = {}
+    added = []
+    for first, onward_carrier in short_connections:
+        earliest = first["arr"] + timedelta(hours=1)
+        latest = first["arr"] + timedelta(hours=5)
+        for when in dict.fromkeys((earliest.date(), latest.date())):
+            key = first["arr_airport"], destination, when
+            if key not in searches:
+                if len(searches) >= 3:
+                    continue
+                try:
+                    searches[key] = search_single_leg(*key, direct_only=True)
+                except Exception:
+                    searches[key] = []
+                    if diagnostics is not None:
+                        diagnostics.append({"API 편명": "—", "처리": f"보완 조회 실패 ({key[0]}→{destination}, {when})"})
+            for option in searches[key]:
+                second = option[0]
+                if second["carrier"] != onward_carrier or not earliest <= second["dep"] <= latest:
+                    continue
+                legs = [first, {**second, "supplemental_connection": True}]
+                if identity(legs) in seen:
+                    continue
+                seen.add(identity(legs))
+                added.append(legs)
+                if diagnostics is not None:
+                    diagnostics.append({"API 편명": f"{first['number']} / {second['number']}", "처리": "구간별 보완 조회로 추가"})
+    return added
 
 
 def flight_rows(pair, start_date):
@@ -115,7 +157,8 @@ def flight_rows(pair, start_date):
 
 
 def _flight_option_label(legs):
-    return " / ".join(
+    prefix = "[구간별 조회 조합] " if any(leg.get("supplemental_connection") for leg in legs) else ""
+    return prefix + " / ".join(
         f"{leg['number']} {leg['dep_airport']} {leg['dep']:%m-%d %H:%M} → "
         f"{leg['arr_airport']} {leg['arr']:%m-%d %H:%M}"
         for leg in legs
@@ -170,7 +213,7 @@ def render_flight_search_ui():
             chosen = {}
             for direction, label in (("out", "출국편"), ("ret", "귀국편")):
                 legs, details, error = results[direction]
-                st.markdown(f"**{label} · 표시 {len(legs)}개 / API 반환 {len(details)}개**")
+                st.markdown(f"**{label} · 표시 {len(legs)}개**")
                 if error:
                     st.warning(f"{label} 조회 실패 · {error}")
                 elif not legs:
@@ -183,6 +226,8 @@ def render_flight_search_ui():
                         format_func=lambda i, options=legs: _flight_option_label(options[i]),
                     )
                     chosen[direction] = legs[index]
+            if any(leg.get("supplemental_connection") for legs in chosen.values() for leg in legs):
+                st.caption("구간별 조회 조합은 견적용입니다. 단일 예약 및 단체석은 수배 단계에서 확인하세요.")
             if len(chosen) == 2 and st.button("선택한 출·귀국편을 일정표에 적용"):
                 st.session_state["selected_flight_pair"] = chosen
                 st.session_state["itinerary_start_date"] = outbound_date
