@@ -38,7 +38,7 @@ def parse_segment(segment):
     }
 
 
-def search_single_leg(dep_code, arr_code, flight_date):
+def search_single_leg(dep_code, arr_code, flight_date, diagnostics=None):
     key = st.secrets.get("SERPAPI_API_KEY", "")
     if not key:
         raise ValueError("Streamlit Secrets에 SERPAPI_API_KEY를 설정해 주세요.")
@@ -60,24 +60,32 @@ def search_single_leg(dep_code, arr_code, flight_date):
     results = []
     for option in (response.get("best_flights") or []) + (response.get("other_flights") or []):
         raw = option.get("flights") or []
+        numbers = " / ".join(str(leg.get("flight_number") or "편명 없음") for leg in raw)
+        reason = ""
+        legs = []
         if not 1 <= len(raw) <= 2:
-            continue
-        try:
-            legs = [parse_segment(segment) for segment in raw]
-        except (KeyError, TypeError, ValueError):
-            continue
-        if (legs[0]["dep_airport"], legs[-1]["arr_airport"], legs[0]["dep"].date()) != (
-            dep_code, arr_code, flight_date
-        ):
-            continue
-        if len(legs) == 2:
-            first, second = legs
-            if first["arr_airport"] != second["dep_airport"]:
-                continue
-            layover = second["dep"] - first["arr"]
-            if not timedelta(hours=1) <= layover <= timedelta(hours=5):
-                continue
-        results.append(legs)
+            reason = "구간 정보 없음 또는 2회 이상 경유"
+        else:
+            try:
+                legs = [parse_segment(segment) for segment in raw]
+            except (KeyError, TypeError, ValueError):
+                reason = "편명·공항·시간 데이터 형식 불일치"
+        if legs:
+            if (legs[0]["dep_airport"], legs[-1]["arr_airport"], legs[0]["dep"].date()) != (
+                dep_code, arr_code, flight_date
+            ):
+                reason = "요청한 공항 또는 출발일과 다름"
+            elif len(legs) == 2:
+                first, second = legs
+                layover = second["dep"] - first["arr"]
+                if first["arr_airport"] != second["dep_airport"]:
+                    reason = "환승 공항이 다름"
+                elif not timedelta(hours=1) <= layover <= timedelta(hours=5):
+                    reason = f"환승 {layover // timedelta(minutes=1)}분 (허용 60~300분)"
+        if diagnostics is not None:
+            diagnostics.append({"API 편명": numbers or "—", "처리": reason or "표시"})
+        if not reason:
+            results.append(legs)
     return results
 
 
@@ -106,6 +114,14 @@ def flight_rows(pair, start_date):
     return rows
 
 
+def _flight_option_label(legs):
+    return " / ".join(
+        f"{leg['number']} {leg['dep_airport']} {leg['dep']:%m-%d %H:%M} → "
+        f"{leg['arr_airport']} {leg['arr']:%m-%d %H:%M}"
+        for leg in legs
+    )
+
+
 def render_flight_search_ui():
     with st.expander("✈️ 유럽 항공 스케줄 조회 및 일정표 적용"):
         first, second = st.columns(2)
@@ -124,42 +140,51 @@ def render_flight_search_ui():
         criteria = outbound_date, return_date, destination, origin
         if st.session_state.get("flight_criteria") != criteria:
             st.session_state.pop("selected_flight_pair", None)
-            st.session_state.pop("flight_pairs", None)
+            st.session_state.pop("flight_direction_results", None)
             st.session_state["flight_criteria"] = criteria
-        if st.button("🔎 동일 항공사 출·귀국 조회", type="primary"):
+        if st.button("🔎 출국편·귀국편 조회", type="primary"):
             st.session_state.pop("selected_flight_pair", None)
-            st.session_state.pop("flight_pairs", None)
+            st.session_state.pop("flight_direction_results", None)
+            st.session_state["generated_file"] = None
             if return_date < outbound_date or not all(re.fullmatch(r"[A-Z]{3}", code) for code in (destination, origin)):
                 st.warning("출발일과 귀국편 현지 출발일, 공항 코드 세 자리를 확인해 주세요.")
                 return
-            try:
-                with st.spinner("항공 스케줄 조회 중"):
-                    outbound = search_single_leg("ICN", destination, outbound_date)
-                    inbound = search_single_leg(origin, "ICN", return_date)
-            except Exception as error:
-                st.error(str(error) if isinstance(error, ValueError) else "항공 조회 중 오류가 발생했습니다.")
-                return
-            first_return = {}
-            for legs in inbound:
-                first_return.setdefault(legs[0]["carrier"], legs)
-            pairs = {}
-            for legs in outbound:
-                carrier = legs[0]["carrier"]
-                if carrier in first_return:
-                    pairs.setdefault(carrier, {"out": legs, "ret": first_return[carrier]})
-            st.session_state["flight_pairs"] = list(pairs.values())
+            results = {}
+            with st.spinner("출국편과 귀국편을 각각 조회하고 있습니다."):
+                for direction, dep, arr, when in (
+                    ("out", "ICN", destination, outbound_date),
+                    ("ret", origin, "ICN", return_date),
+                ):
+                    details = []
+                    try:
+                        legs = search_single_leg(dep, arr, when, diagnostics=details)
+                        results[direction] = legs, details, ""
+                    except Exception as error:
+                        message = str(error) if isinstance(error, ValueError) else "항공 API 요청 실패"
+                        results[direction] = [], details, message
+            st.session_state["flight_direction_results"] = results
 
-        pairs = st.session_state.get("flight_pairs")
-        if pairs == []:
-            st.warning("조회 결과에서 조건에 맞는 동일 항공사 조합을 찾지 못했습니다.")
-        for index, pair in enumerate((pairs or [])[:5]):
-            st.markdown(f"**{pair['out'][0]['airline']}**")
-            for label, direction in (("출국", "out"), ("귀국", "ret")):
-                st.write(label)
-                for leg in pair[direction]:
-                    st.text(f"{leg['number']}  {leg['dep_airport']} {leg['dep']:%Y-%m-%d %H:%M} → {leg['arr_airport']} {leg['arr']:%Y-%m-%d %H:%M}")
-            if st.button("이 항공편을 일정표에 적용", key=f"apply_flights_{index}"):
-                st.session_state["selected_flight_pair"] = pair
+        results = st.session_state.get("flight_direction_results")
+        if results:
+            show_details = st.checkbox("API 반환 편명과 제외 이유 보기", key="fs_show_details")
+            chosen = {}
+            for direction, label in (("out", "출국편"), ("ret", "귀국편")):
+                legs, details, error = results[direction]
+                st.markdown(f"**{label} · 표시 {len(legs)}개 / API 반환 {len(details)}개**")
+                if error:
+                    st.warning(f"{label} 조회 실패 · {error}")
+                elif not legs:
+                    st.info("API가 후보를 반환하지 않았습니다." if not details else "API 후보가 모두 제외됐습니다.")
+                if show_details and details:
+                    st.dataframe(details, hide_index=True)
+                if legs:
+                    index = st.selectbox(
+                        f"{label} 선택", range(len(legs)), key=f"fs_choose_{direction}",
+                        format_func=lambda i, options=legs: _flight_option_label(options[i]),
+                    )
+                    chosen[direction] = legs[index]
+            if len(chosen) == 2 and st.button("선택한 출·귀국편을 일정표에 적용"):
+                st.session_state["selected_flight_pair"] = chosen
                 st.session_state["itinerary_start_date"] = outbound_date
                 st.session_state["generated_file"] = None
         if st.session_state.get("selected_flight_pair"):
