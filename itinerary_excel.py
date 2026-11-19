@@ -1,35 +1,3 @@
-from copy import copy
-from datetime import datetime, timedelta
-from io import BytesIO
-from pathlib import Path
-import re
-from unicodedata import east_asian_width
-
-from openpyxl import load_workbook
-from openpyxl.cell.rich_text import CellRichText, TextBlock
-from openpyxl.cell.text import InlineFont
-from openpyxl.worksheet.pagebreak import Break
-
-
-TEMPLATE = Path(__file__).with_name("itinerary-template.xlsx")
-WEEKDAYS = ("월요일", "화요일", "수요일", "목요일", "금요일", "토요일", "일요일")
-
-
-def _set_text(cell, value):
-    cell.value = value
-    if cell.data_type == "f":
-        cell.data_type = "s"
-
-
-def _write_schedule(cell, value):
-    parts = re.split(r"\*\*(.+?)\*\*", str(value or ""))
-    if len(parts) == 1:
-        _set_text(cell, value or None)
-        return
-    font = InlineFont(rFont=cell.font.name, sz=cell.font.sz, b=True)
-    cell.value = CellRichText([
-        TextBlock(font, part) if index % 2 else part
-        for index, part in enumerate(parts) if part
     ])
 
 
@@ -51,8 +19,11 @@ def _display_transport(row):
 def render_itinerary(days, start_date, title):
     if not days:
         raise ValueError("출력할 일정이 없습니다.")
-    workbook = load_workbook(TEMPLATE, rich_text=True)
+    workbook = load_workbook(TEMPLATE, rich_text=True, keep_links=False)
+    # The itinerary template uses static cells; legacy names can still point outside it.
+    workbook.defined_names.clear()
     sheet = workbook.active
+    sheet.defined_names.clear()
     row_styles = {
         number: tuple(copy(cell._style) for cell in sheet[number][:7])
         for number in (4, 5, 6, 7, 8, 10, 13, 22, 23, 55, 72, 75, 76)
@@ -69,7 +40,7 @@ def render_itinerary(days, start_date, title):
     sheet.row_breaks.brk.clear()
     _set_text(sheet["A2"], title)
 
-    def style_row(number, source, height=18):
+    def style_row(number, source, height=BODY_ROW_HEIGHT):
         sheet.row_dimensions[number].height = height
         for col, style in enumerate(row_styles[source], 1):
             sheet.cell(number, col)._style = copy(style)
@@ -82,12 +53,7 @@ def render_itinerary(days, start_date, title):
         meals = item.get("meals") or []
         hotel = item.get("hotel")
         size = max(3, len(rows))
-        heights = []
-        for row in rows:
-            schedule = str(row.get("schedule") or "").replace("**", "")
-            widths = [sum(2 if east_asian_width(c) in "WF" else 1 for c in line) for line in schedule.split("\n")]
-            heights.append(18 * sum(max(1, (width + 61) // 62) for width in widths))
-        block_height = sum(heights) + 18 * (size - len(rows) + bool(hotel))
+        block_height = BODY_ROW_HEIGHT * (size + bool(hotel))
         # Repeat the sample's spacer and header after approximately one page of rows.
         if used_height and used_height + block_height > 900:
             style_row(current, 55, 11.25)
@@ -104,7 +70,7 @@ def render_itinerary(days, start_date, title):
             if offset == size - 1 and not hotel and offset >= 2:
                 source = 75
             row_number = current + offset
-            style_row(row_number, source, heights[offset] if offset < len(rows) else 18)
+            style_row(row_number, source)
             if offset >= len(rows):
                 continue
             row = rows[offset]
