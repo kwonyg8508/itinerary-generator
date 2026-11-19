@@ -1,3 +1,35 @@
+from copy import copy
+from datetime import datetime, timedelta
+from io import BytesIO
+from pathlib import Path
+import re
+
+from openpyxl import load_workbook
+from openpyxl.cell.rich_text import CellRichText, TextBlock
+from openpyxl.cell.text import InlineFont
+from openpyxl.worksheet.pagebreak import Break
+
+
+TEMPLATE = Path(__file__).with_name("itinerary-template.xlsx")
+BODY_ROW_HEIGHT = 36
+WEEKDAYS = ("월요일", "화요일", "수요일", "목요일", "금요일", "토요일", "일요일")
+
+
+def _set_text(cell, value):
+    cell.value = value
+    if cell.data_type == "f":
+        cell.data_type = "s"
+
+
+def _write_schedule(cell, value):
+    parts = re.split(r"\*\*(.+?)\*\*", str(value or ""))
+    if len(parts) == 1:
+        _set_text(cell, value or None)
+        return
+    font = InlineFont(rFont=cell.font.name, sz=cell.font.sz, b=True)
+    cell.value = CellRichText([
+        TextBlock(font, part) if index % 2 else part
+        for index, part in enumerate(parts) if part
     ])
 
 
