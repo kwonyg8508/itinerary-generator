@@ -2,7 +2,6 @@ import re
 from datetime import date, datetime, timedelta
 
 import streamlit as st
-from serpapi import GoogleSearch
 
 
 AIRPORTS = {
@@ -43,6 +42,14 @@ def search_single_leg(dep_code, arr_code, flight_date):
     key = st.secrets.get("SERPAPI_API_KEY", "")
     if not key:
         raise ValueError("Streamlit Secrets에 SERPAPI_API_KEY를 설정해 주세요.")
+    try:
+        from serpapi import GoogleSearch
+    except ImportError as error:
+        raise ValueError(
+            "항공 검색 라이브러리를 불러오지 못했습니다. "
+            "requirements.txt에 google-search-results가 설치되도록 설정해 주세요."
+        ) from error
+
     response = GoogleSearch({
         "engine": "google_flights", "departure_id": dep_code,
         "arrival_id": arr_code, "outbound_date": flight_date.isoformat(),
@@ -90,7 +97,7 @@ def flight_rows(pair, start_date):
                 airport = leg[field + "_airport"]
                 row = {
                     "city": airport,
-                    "transport": leg["number"],
+                    "transport": leg["number"] if field == "dep" else "",
                     "time": local_time.strftime("%H:%M"),
                     "schedule": f"{airport} {label}",
                 }
@@ -162,3 +169,97 @@ def render_flight_search_ui():
                 st.session_state.pop("selected_flight_pair", None)
                 st.session_state["generated_file"] = None
                 st.rerun()
+
+
+REGION_ROUTES = (
+    (("동유럽", "체코", "헝가리"), (("VIE", "PRG"), ("PRG", "BUD"), ("BUD", "VIE"))),
+    (("이탈리아", "돌로미티"), (("MXP", "FCO"), ("FCO", "MXP"))),
+    (("스페인", "포르투갈"), (("MAD", "LIS"), ("MAD", "BCN"), ("BCN", "MAD"))),
+    (("그리스",), (("ATH", "ATH"),)),
+    (("아이슬란드",), (("KEF", "KEF"),)),
+    (("북유럽",), (("CPH", "HEL"), ("OSL", "CPH"), ("ARN", "HEL"))),
+)
+
+
+def inquiry_conditions(prompt, today):
+    month_match = re.search(r"(?:(20\d\d)\s*년\s*|(내년|올해)\s*)?(1[0-2]|0?[1-9])\s*월", prompt)
+    days_match = re.search(r"(\d{1,2})\s*일(?!차|자)", prompt)
+    routes = next((routes for keywords, routes in REGION_ROUTES if any(word in prompt for word in keywords)), None)
+    if not month_match or not days_match or not routes:
+        raise ValueError("출발 월, 총 일정 일수, 지원 지역을 입력해 주세요. 예: 내년 3월 동유럽 10일 16명 국적기")
+    explicit_year, relative_year, month = month_match.groups()
+    month = int(month)
+    year = int(explicit_year) if explicit_year else today.year + (relative_year == "내년")
+    if not explicit_year and not relative_year and month < today.month:
+        year += 1
+    days = int(days_match[1])
+    if not 3 <= days <= 25:
+        raise ValueError("총 일정 일수는 3~25일로 입력해 주세요.")
+    return year, month, days, routes, "국적기" in prompt
+
+
+def search_inquiry(prompt, today, search=search_single_leg):
+    year, month, days, routes, national = inquiry_conditions(prompt, today)
+    dates = [date(year, month, day) for day in (3, 10, 17, 24)]
+    dates = [day for day in dates if day >= today]
+    if not dates and (year, month) == (today.year, today.month):
+        dates = [today]
+    if not dates:
+        raise ValueError("이미 지난 달입니다. 출발 월을 확인해 주세요.")
+    cache = {}
+    candidates = []
+
+    def find(origin, destination, when):
+        key = origin, destination, when
+        if key not in cache:
+            cache[key] = search(*key)
+        return cache[key]
+
+    for departure in dates:
+        arrival_home = departure + timedelta(days=days - 1)
+        for destination, origin in routes:
+            for outbound in find("ICN", destination, departure):
+                carrier = outbound[0]["carrier"]
+                if national and carrier not in {"KE", "OZ"}:
+                    continue
+                for return_date in (arrival_home - timedelta(days=1), arrival_home):
+                    if return_date < outbound[-1]["arr"].date():
+                        continue
+                    for inbound in find(origin, "ICN", return_date):
+                        if inbound[0]["carrier"] == carrier and inbound[-1]["arr"].date() == arrival_home:
+                            candidates.append({"out": outbound, "ret": inbound})
+    candidates.sort(key=lambda pair: (len(pair["out"]) + len(pair["ret"]), pair["out"][0]["dep"]))
+    distinct = {}
+    for pair in candidates:
+        outbound, inbound = pair["out"], pair["ret"]
+        key = outbound[0]["dep"].date(), outbound[-1]["arr_airport"], inbound[0]["dep_airport"]
+        distinct.setdefault(key, pair)
+    return list(distinct.values())[:3]
+
+
+def render_inquiry_flights(prompt):
+    if st.button("간단 요청에서 항공 후보 찾기", key="inquiry_search"):
+        st.session_state.pop("inquiry_flight_results", None)
+        try:
+            with st.spinner("월별 대표 날짜와 공항 조합을 조회하고 있습니다."):
+                results = search_inquiry(prompt, date.today())
+            st.session_state["inquiry_flight_results"] = (prompt, results)
+        except ValueError as error:
+            st.warning(str(error))
+        except Exception:
+            st.error("항공 조회에 실패했습니다. 잠시 후 다시 시도해 주세요.")
+    query, results = st.session_state.get("inquiry_flight_results", ("", None))
+    if query != prompt or results is None:
+        return
+    if not results:
+        st.info("대표 날짜에서 일치하는 조합이 없어요. 화면 상단에서 날짜와 공항을 직접 조회할 수 있습니다.")
+    for index, pair in enumerate(results):
+        for label, direction in (("출국", "out"), ("귀국", "ret")):
+            st.write(label)
+            for leg in pair[direction]:
+                st.text(f"{leg['number']}  {leg['dep_airport']} {leg['dep']:%m-%d %H:%M} → {leg['arr_airport']} {leg['arr']:%m-%d %H:%M}")
+        def apply(selected=pair):
+            st.session_state["selected_flight_pair"] = selected
+            st.session_state["itinerary_start_date"] = selected["out"][0]["dep"].date()
+            st.session_state["generated_file"] = None
+        st.button("이 후보를 일정표에 적용", key=f"inquiry_apply_{index}", on_click=apply)

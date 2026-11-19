@@ -33,6 +33,21 @@ def _write_schedule(cell, value):
     ])
 
 
+def _display_transport(row):
+    transport = str(row.get("transport") or "").strip()
+    time = row.get("time") or ""
+    schedule = str(row.get("schedule") or "")
+    if transport == "전용버스":
+        return transport, "전일"
+
+    # A row that also describes boarding the next service may carry its name.
+    arrival = re.search(r"도착|하선|하차|착륙|입항", schedule)
+    departure = re.search(r"출발|출항|이륙|향발|탑승|승선", schedule)
+    if arrival and not departure:
+        return None, time
+    return transport or None, time
+
+
 def render_itinerary(days, start_date, title):
     if not days:
         raise ValueError("출력할 일정이 없습니다.")
@@ -97,8 +112,8 @@ def render_itinerary(days, start_date, title):
             if schedule.lstrip().startswith(("▶", "※")):
                 sheet.cell(row_number, 5)._style = copy(row_styles[22 if schedule.lstrip().startswith("▶") else 23][4])
             _set_text(sheet.cell(row_number, 2), row.get("city") or None)
-            _set_text(sheet.cell(row_number, 3), row.get("transport") or None)
-            time = row.get("time") or ""
+            transport, time = _display_transport(row)
+            _set_text(sheet.cell(row_number, 3), transport)
             if re.fullmatch(r"(?:[01]\d|2[0-3]):[0-5]\d", time):
                 sheet.cell(row_number, 4).value = datetime.strptime(time, "%H:%M").time()
                 sheet.cell(row_number, 4).number_format = time_format
