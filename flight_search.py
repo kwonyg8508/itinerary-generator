@@ -268,11 +268,22 @@ def inquiry_conditions(prompt, today):
     return year, month, days, routes, "국적기" in prompt
 
 
-def search_inquiry(prompt, today, search=search_single_leg):
-    year, month, days, routes, national = inquiry_conditions(prompt, today)
-    dates = [date(year, month, day) for day in (3, 10, 17, 24)]
+def search_inquiry(prompt, today, search=search_single_leg, plan=None):
+    if plan is None:
+        year, month, days, routes, national = inquiry_conditions(prompt, today)
+        exact_date = None
+    else:
+        year, month, days = (plan[key] for key in ("year", "month", "days"))
+        national = "국적기" in prompt or plan.get("national", False)
+        routes = list(dict.fromkeys((r["in"].strip().upper(), r["out"].strip().upper()) for r in plan["routes"]))[:3]
+        if not 3 <= days <= 25 or not routes or not all(
+            re.fullmatch(r"[A-Z]{3}", code) and code != "ICN" for route in routes for code in route
+        ):
+            raise ValueError("AI가 제안한 공항이나 여행 일수를 확인할 수 없습니다. 문의 조건을 보완해 주세요.")
+        exact_date = plan.get("departure_day")
+    dates = [date(year, month, exact_date)] if exact_date else [date(year, month, day) for day in (3, 10, 17, 24)]
     dates = [day for day in dates if day >= today]
-    if not dates and (year, month) == (today.year, today.month):
+    if not dates and not exact_date and (year, month) == (today.year, today.month):
         dates = [today]
     if not dates:
         raise ValueError("이미 지난 달입니다. 출발 월을 확인해 주세요.")
@@ -296,7 +307,7 @@ def search_inquiry(prompt, today, search=search_single_leg):
                     if return_date < outbound[-1]["arr"].date():
                         continue
                     for inbound in find(origin, "ICN", return_date):
-                        if inbound[0]["carrier"] == carrier and inbound[-1]["arr"].date() == arrival_home:
+                        if (not national or inbound[0]["carrier"] in {"KE", "OZ"}) and inbound[-1]["arr"].date() == arrival_home:
                             candidates.append({"out": outbound, "ret": inbound})
     candidates.sort(key=lambda pair: (len(pair["out"]) + len(pair["ret"]), pair["out"][0]["dep"]))
     distinct = {}
@@ -307,12 +318,15 @@ def search_inquiry(prompt, today, search=search_single_leg):
     return list(distinct.values())[:3]
 
 
-def render_inquiry_flights(prompt):
+def render_inquiry_flights(prompt, planner=None):
     if st.button("간단 요청에서 항공 후보 찾기", key="inquiry_search"):
         st.session_state.pop("inquiry_flight_results", None)
         try:
-            with st.spinner("월별 대표 날짜와 공항 조합을 조회하고 있습니다."):
-                results = search_inquiry(prompt, date.today())
+            with st.spinner("문의의 출발 조건과 공항 조합을 검토하고 항공편을 조회합니다."):
+                today = date.today()
+                plan = planner(prompt, today) if planner else None
+                results = search_inquiry(prompt, today, plan=plan)
+                st.session_state["inquiry_airport_plan"] = plan
             st.session_state["inquiry_flight_results"] = (prompt, results)
         except ValueError as error:
             st.warning(str(error))
@@ -321,11 +335,16 @@ def render_inquiry_flights(prompt):
     query, results = st.session_state.get("inquiry_flight_results", ("", None))
     if query != prompt or results is None:
         return
+    plan = st.session_state.get("inquiry_airport_plan")
+    if plan:
+        st.caption("조회한 공항 조합 · " + ", ".join(f"{r['in']} IN / {r['out']} OUT" for r in plan["routes"][:3]))
     if not results:
         st.info("대표 날짜에서 일치하는 조합이 없어요. 화면 상단에서 날짜와 공항을 직접 조회할 수 있습니다.")
     for index, pair in enumerate(results):
         for label, direction in (("출국", "out"), ("귀국", "ret")):
             st.write(label)
+            if any(leg.get("supplemental_connection") for leg in pair[direction]):
+                st.caption("구간별 조회 조합 · 견적용")
             for leg in pair[direction]:
                 st.text(f"{leg['number']}  {leg['dep_airport']} {leg['dep']:%m-%d %H:%M} → {leg['arr_airport']} {leg['arr']:%m-%d %H:%M}")
         def apply(selected=pair):
