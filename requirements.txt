@@ -1,6 +1,8 @@
 streamlit
-openpyxl
+openpyxl>=3.1
 google-genai
 google-search-results
+Pillow
 beautifulsoup4
 requests
+playwright
