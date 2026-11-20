@@ -67,6 +67,8 @@ def _order_departure_day(rows):
 HOTEL_CHECK_IN = re.compile(
     r"호텔(?:에)?\s*(?:체크\s*인|투숙)(?:\s*(?:및|후|하고)\s*휴식)?"
 )
+DEFAULT_HOTEL = "HOTEL : ANY 4* HOTEL CLASS"
+TURKEY_CITIES = ("튀르키예", "터키", "이스탄불", "카파도키아", "파묵칼레", "안탈리아", "앙카라", "이즈미르", "쿠샤다시", "차나칼레", "콘야", "부르사")
 ONBOARD_STAY = re.compile(r"기내|선상|크루즈|페리|훼리|DFDS|실[자야]라인", re.IGNORECASE)
 
 
@@ -137,7 +139,15 @@ def render_itinerary(days, start_date, title):
         day = item["day"]
         rows = _order_departure_day(item["rows"]) if day == 1 else item["rows"]
         meals = item.get("meals") or []
-        hotel = item.get("hotel")
+        hotel = str(item.get("hotel") or "").strip()
+        if not hotel and item is not days[-1]:
+            overnight_onboard = any(
+                re.search(r"기내\s*숙박|선상\s*숙박|선내\s*숙박|선상\s*투숙", str(row.get("schedule") or ""))
+                for row in rows
+            )
+            if not overnight_onboard:
+                stay_city = next((str(row["city"]) for row in reversed(rows) if row.get("city")), "")
+                hotel = "HOTEL : ANY 5* HOTEL CLASS" if any(city in stay_city for city in TURKEY_CITIES) else DEFAULT_HOTEL
         if item is days[-1]:
             rows = _order_return_day(rows)
         rows = _hotel_rows(rows, hotel)
