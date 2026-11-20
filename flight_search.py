@@ -131,25 +131,47 @@ def _find_later_connections(short_connections, destination, existing, diagnostic
     return added
 
 
+EXTRA_AIRPORT_CITIES = {
+    "ICN": "인천", "GMP": "서울", "PUS": "부산", "DOH": "도하",
+    "AUH": "아부다비", "CTA": "카타니아", "PMO": "팔레르모", "MLA": "몰타",
+    "TLL": "탈린", "RIX": "리가", "VNO": "빌뉴스", "BER": "베를린",
+    "DUS": "뒤셀도르프", "BRU": "브뤼셀", "GVA": "제네바", "LYS": "리옹",
+    "NCE": "니스", "MRS": "마르세유", "JTR": "산토리니", "HER": "이라클리온",
+    "NAP": "나폴리", "BLQ": "볼로냐", "FLR": "피렌체", "TRN": "토리노",
+    "AGP": "말라가", "SVQ": "세비야", "BIO": "빌바오", "OPO": "포르투",
+    "BGO": "베르겐", "GOT": "예테보리", "RVN": "로바니에미", "KTT": "키틸래",
+    "LUX": "룩셈부르크", "SOF": "소피아", "OTP": "부쿠레슈티", "SAJ": "사라예보",
+    "SJJ": "사라예보", "BEG": "베오그라드", "SKP": "스코페", "TIA": "티라나",
+    "DUB": "더블린", "EDI": "에든버러", "MAN": "맨체스터", "LHR": "런던",
+    "FCO": "로마", "MXP": "밀라노", "CDG": "파리",
+}
+
+
+def _flight_city(code):
+    return EXTRA_AIRPORT_CITIES.get(code) or AIRPORTS.get(code) or "공항"
+
+
 def flight_rows(pair, start_date):
     rows = {}
     for direction, legs in pair.items():
-        for index, leg in enumerate(legs):
+        for leg in legs:
+            dep_city = _flight_city(leg["dep_airport"])
+            arr_city = _flight_city(leg["arr_airport"])
             events = (
-                ("dep", "항공편 출발" if index == 0 else "환승편 출발"),
-                ("arr", "경유 공항 도착" if index < len(legs) - 1 else "도착"),
+                ("dep", dep_city, f"{dep_city} 출발, {arr_city} 향발"),
+                ("arr", arr_city, f"{arr_city} 도착"),
             )
-            for field, label in events:
+            for field, city, schedule in events:
                 local_time = leg[field]
                 day = (local_time.date() - start_date).days + 1
                 if day < 1:
                     raise ValueError("항공 일정의 현지 날짜가 행사 시작일보다 앞섭니다.")
-                airport = leg[field + "_airport"]
                 row = {
-                    "city": airport,
+                    "city": city,
                     "transport": leg["number"] if field == "dep" else "",
                     "time": local_time.strftime("%H:%M"),
-                    "schedule": f"{airport} {label}",
+                    "schedule": schedule,
+                    "flight_event": field,
                 }
                 position = "prepend" if direction == "out" else "append"
                 rows.setdefault(day, {"prepend": [], "append": []})[position].append(row)
@@ -268,11 +290,22 @@ def inquiry_conditions(prompt, today):
     return year, month, days, routes, "국적기" in prompt
 
 
-def search_inquiry(prompt, today, search=search_single_leg):
-    year, month, days, routes, national = inquiry_conditions(prompt, today)
-    dates = [date(year, month, day) for day in (3, 10, 17, 24)]
+def search_inquiry(prompt, today, search=search_single_leg, plan=None):
+    if plan is None:
+        year, month, days, routes, national = inquiry_conditions(prompt, today)
+        exact_date = None
+    else:
+        year, month, days = (plan[key] for key in ("year", "month", "days"))
+        national = "국적기" in prompt or plan.get("national", False)
+        routes = list(dict.fromkeys((r["in"].strip().upper(), r["out"].strip().upper()) for r in plan["routes"]))[:3]
+        if not 3 <= days <= 25 or not routes or not all(
+            re.fullmatch(r"[A-Z]{3}", code) and code != "ICN" for route in routes for code in route
+        ):
+            raise ValueError("AI가 제안한 공항이나 여행 일수를 확인할 수 없습니다. 문의 조건을 보완해 주세요.")
+        exact_date = plan.get("departure_day")
+    dates = [date(year, month, exact_date)] if exact_date else [date(year, month, day) for day in (3, 10, 17, 24)]
     dates = [day for day in dates if day >= today]
-    if not dates and (year, month) == (today.year, today.month):
+    if not dates and not exact_date and (year, month) == (today.year, today.month):
         dates = [today]
     if not dates:
         raise ValueError("이미 지난 달입니다. 출발 월을 확인해 주세요.")
@@ -296,7 +329,7 @@ def search_inquiry(prompt, today, search=search_single_leg):
                     if return_date < outbound[-1]["arr"].date():
                         continue
                     for inbound in find(origin, "ICN", return_date):
-                        if inbound[0]["carrier"] == carrier and inbound[-1]["arr"].date() == arrival_home:
+                        if (not national or inbound[0]["carrier"] in {"KE", "OZ"}) and inbound[-1]["arr"].date() == arrival_home:
                             candidates.append({"out": outbound, "ret": inbound})
     candidates.sort(key=lambda pair: (len(pair["out"]) + len(pair["ret"]), pair["out"][0]["dep"]))
     distinct = {}
@@ -307,12 +340,15 @@ def search_inquiry(prompt, today, search=search_single_leg):
     return list(distinct.values())[:3]
 
 
-def render_inquiry_flights(prompt):
+def render_inquiry_flights(prompt, planner=None):
     if st.button("간단 요청에서 항공 후보 찾기", key="inquiry_search"):
         st.session_state.pop("inquiry_flight_results", None)
         try:
-            with st.spinner("월별 대표 날짜와 공항 조합을 조회하고 있습니다."):
-                results = search_inquiry(prompt, date.today())
+            with st.spinner("문의의 출발 조건과 공항 조합을 검토하고 항공편을 조회합니다."):
+                today = date.today()
+                plan = planner(prompt, today) if planner else None
+                results = search_inquiry(prompt, today, plan=plan)
+                st.session_state["inquiry_airport_plan"] = plan
             st.session_state["inquiry_flight_results"] = (prompt, results)
         except ValueError as error:
             st.warning(str(error))
@@ -321,11 +357,16 @@ def render_inquiry_flights(prompt):
     query, results = st.session_state.get("inquiry_flight_results", ("", None))
     if query != prompt or results is None:
         return
+    plan = st.session_state.get("inquiry_airport_plan")
+    if plan:
+        st.caption("조회한 공항 조합 · " + ", ".join(f"{r['in']} IN / {r['out']} OUT" for r in plan["routes"][:3]))
     if not results:
         st.info("대표 날짜에서 일치하는 조합이 없어요. 화면 상단에서 날짜와 공항을 직접 조회할 수 있습니다.")
     for index, pair in enumerate(results):
         for label, direction in (("출국", "out"), ("귀국", "ret")):
             st.write(label)
+            if any(leg.get("supplemental_connection") for leg in pair[direction]):
+                st.caption("구간별 조회 조합 · 견적용")
             for leg in pair[direction]:
                 st.text(f"{leg['number']}  {leg['dep_airport']} {leg['dep']:%m-%d %H:%M} → {leg['arr_airport']} {leg['arr']:%m-%d %H:%M}")
         def apply(selected=pair):
