@@ -64,6 +64,44 @@ def _order_departure_day(rows):
     return remaining[:index] + meetings + remaining[index:]
 
 
+HOTEL_CHECK_IN = re.compile(
+    r"호텔(?:에)?\s*(?:체크\s*인|투숙)(?:\s*(?:및|후|하고)\s*휴식)?"
+)
+ONBOARD_STAY = re.compile(r"기내|선상|크루즈|페리|훼리|DFDS|실[자야]라인", re.IGNORECASE)
+
+
+def _hotel_rows(rows, hotel):
+    activities = []
+    check_in = None
+    for row in rows:
+        schedule = str(row.get("schedule") or "")
+        match = HOTEL_CHECK_IN.search(schedule)
+        if not match:
+            activities.append(row)
+            continue
+
+        before = re.sub(r"[,·/ ]*(?:하여|해서|한\s*후|후|및)\s*$", "", schedule[:match.start()]).strip()
+        after = schedule[match.end():].strip(" ,·/;")
+        if before or after:
+            activities.append({**row, "schedule": " ".join(part for part in (before, after) if part)})
+            check_in = {"schedule": "호텔 투숙 및 휴식"}
+        else:
+            check_in = {**row, "schedule": "호텔 투숙 및 휴식"}
+
+    if check_in is not None:
+        activities.append(check_in)
+    elif hotel and not ONBOARD_STAY.search(hotel):
+        activities.append({"schedule": "호텔 투숙 및 휴식"})
+    return activities
+
+
+def _order_return_day(rows):
+    arrival = next((row for row in rows if row.get("flight_event") == "arr" and row.get("city") == "인천"), None)
+    if arrival is None:
+        return rows
+    return [arrival] + [row for row in rows if row is not arrival]
+
+
 def render_itinerary(days, start_date, title):
     if not days:
         raise ValueError("출력할 일정이 없습니다.")
@@ -94,11 +132,17 @@ def render_itinerary(days, start_date, title):
 
     current = 5
     used_height = 0
+    previous_city = ""
     for item in days:
         day = item["day"]
         rows = _order_departure_day(item["rows"]) if day == 1 else item["rows"]
         meals = item.get("meals") or []
         hotel = item.get("hotel")
+        if item is days[-1]:
+            rows = _order_return_day(rows)
+        rows = _hotel_rows(rows, hotel)
+        if rows and rows[-1].get("schedule") == "호텔 투숙 및 휴식" and len(rows) < 3:
+            rows = rows[:-1] + [{}] * (3 - len(rows)) + rows[-1:]
         size = max(3, len(rows))
         block_height = BODY_ROW_HEIGHT * (size + bool(hotel))
         # Repeat the sample's spacer and header after approximately one page of rows.
@@ -124,7 +168,11 @@ def render_itinerary(days, start_date, title):
             schedule = row.get("schedule") or ""
             if schedule.lstrip().startswith(("▶", "※")):
                 sheet.cell(row_number, 5)._style = copy(row_styles[22 if schedule.lstrip().startswith("▶") else 23][4])
-            _set_text(sheet.cell(row_number, 2), row.get("city") or None)
+            city = str(row.get("city") or "").strip()
+            city_key = re.sub(r"\s+", "", city)
+            if city_key and city_key != previous_city:
+                _set_text(sheet.cell(row_number, 2), city)
+                previous_city = city_key
             transport, time = _display_transport(row)
             for column in (3, 4):
                 cell = sheet.cell(row_number, column)
