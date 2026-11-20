@@ -135,7 +135,7 @@ def render_itinerary(days, start_date, title):
     current = 5
     used_height = 0
     previous_city = ""
-    for item in days:
+    for index, item in enumerate(days):
         day = item["day"]
         rows = _order_departure_day(item["rows"]) if day == 1 else item["rows"]
         meals = item.get("meals") or []
@@ -145,7 +145,17 @@ def render_itinerary(days, start_date, title):
                 re.search(r"기내\s*숙박|선상\s*숙박|선내\s*숙박|선상\s*투숙", str(row.get("schedule") or ""))
                 for row in rows
             )
-            if not overnight_onboard:
+            last_schedule = str(rows[-1].get("schedule") or "") if rows else ""
+            evening_sailing = (
+                ONBOARD_STAY.search(last_schedule)
+                and re.search(r"탑승|출항|승선", last_schedule)
+                and not any(HOTEL_CHECK_IN.search(str(row.get("schedule") or "")) for row in rows)
+                and any(not row.get("flight_event") and re.search(r"하선|입항|도착", str(row.get("schedule") or ""))
+                        for row in days[index + 1]["rows"][:3])
+            )
+            if evening_sailing:
+                hotel = "HOTEL : 선상숙박"
+            elif not overnight_onboard:
                 stay_city = next((str(row["city"]) for row in reversed(rows) if row.get("city")), "")
                 hotel = "HOTEL : ANY 5* HOTEL CLASS" if any(city in stay_city for city in TURKEY_CITIES) else DEFAULT_HOTEL
         if item is days[-1]:
@@ -184,6 +194,16 @@ def render_itinerary(days, start_date, title):
                 _set_text(sheet.cell(row_number, 2), city)
                 previous_city = city_key
             transport, time = _display_transport(row)
+            duration = re.fullmatch(
+                r"(?:약\s*)?(?:\d+\s*시간(?:\s*\d+\s*분)?|\d+\s*분)(?:\s*소요)?",
+                str(row.get("time") or "").strip(),
+            )
+            if duration:
+                if not re.search(r"\d+\s*(?:시간|분)", schedule):
+                    label = duration[0]
+                    schedule = f"{schedule} ({label}{'' if label.endswith('소요') else ' 소요'})".strip()
+                if transport != "전용버스":
+                    time = ""
             for column in (3, 4):
                 cell = sheet.cell(row_number, column)
                 font = copy(cell.font)
