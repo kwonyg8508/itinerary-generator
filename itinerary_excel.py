@@ -11,7 +11,7 @@ from openpyxl.worksheet.pagebreak import Break
 
 
 TEMPLATE = Path(__file__).with_name("itinerary-template.xlsx")
-BODY_ROW_HEIGHT = 36
+BODY_ROW_HEIGHT = 25
 WEEKDAYS = ("월요일", "화요일", "수요일", "목요일", "금요일", "토요일", "일요일")
 
 
@@ -48,6 +48,22 @@ def _display_transport(row):
     return transport or None, time
 
 
+def _order_departure_day(rows):
+    first_departure = next((i for i, row in enumerate(rows) if row.get("flight_event") == "dep"), None)
+    if first_departure is None:
+        return rows
+    meetings = []
+    remaining = []
+    for row in rows:
+        schedule = str(row.get("schedule") or "")
+        if not row.get("flight_event") and re.search(r"인천|ICN", schedule) and re.search(r"미팅|집결|출국 수속|출국수속", schedule):
+            meetings.append({**row, "time": ""})
+        else:
+            remaining.append(row)
+    index = next(i for i, row in enumerate(remaining) if row.get("flight_event") == "dep")
+    return remaining[:index] + meetings + remaining[index:]
+
+
 def render_itinerary(days, start_date, title):
     if not days:
         raise ValueError("출력할 일정이 없습니다.")
@@ -63,7 +79,6 @@ def render_itinerary(days, start_date, title):
     header = [cell.value for cell in sheet[4][:7]]
     notice = sheet["A76"].value
     date_format = sheet["A6"].number_format
-    time_format = sheet["D6"].number_format
     sheet.unmerge_cells("A76:G76")
     sheet.delete_rows(5, 73)
     for number in list(sheet.row_dimensions):
@@ -81,7 +96,7 @@ def render_itinerary(days, start_date, title):
     used_height = 0
     for item in days:
         day = item["day"]
-        rows = item["rows"]
+        rows = _order_departure_day(item["rows"]) if day == 1 else item["rows"]
         meals = item.get("meals") or []
         hotel = item.get("hotel")
         size = max(3, len(rows))
@@ -111,10 +126,15 @@ def render_itinerary(days, start_date, title):
                 sheet.cell(row_number, 5)._style = copy(row_styles[22 if schedule.lstrip().startswith("▶") else 23][4])
             _set_text(sheet.cell(row_number, 2), row.get("city") or None)
             transport, time = _display_transport(row)
+            for column in (3, 4):
+                cell = sheet.cell(row_number, column)
+                font = copy(cell.font)
+                font.bold = False
+                cell.font = font
             _set_text(sheet.cell(row_number, 3), transport)
-            if re.fullmatch(r"(?:[01]\d|2[0-3]):[0-5]\d", time):
+            if re.fullmatch(r"(?:[01]?\d|2[0-3]):[0-5]\d", time):
                 sheet.cell(row_number, 4).value = datetime.strptime(time, "%H:%M").time()
-                sheet.cell(row_number, 4).number_format = time_format
+                sheet.cell(row_number, 4).number_format = "hh:mm"
             else:
                 _set_text(sheet.cell(row_number, 4), time or None)
             _write_schedule(sheet.cell(row_number, 5), schedule)
